@@ -1,0 +1,35 @@
+run:
+  run_id: "ExampleJSONL_2026-01-28"
+  out_dir: "storage_example"
+  shard_docs: 2
+  log_every_docs: 1
+  checkpoint_every_docs: 2
+  policy_version: "policy_v1"
+
+execution:
+  mode: local
+
+sources:
+  - name: "internal_jsonl"
+    type: "batch"
+    kind: "local_jsonl"
+    dataset: "examples/sample_internal.jsonl"
+    split: "train"
+    text_field: "text"
+    license_field: "license"
+    url_field: "url"
+
+policies:
+  licenses: "src/clean_corpus/policies/defaults/licenses.yaml"
+  quality: "src/clean_corpus/policies/defaults/quality.yaml"
+  pii: "src/clean_corpus/policies/defaults/pii.yaml"
+  curriculum: "src/clean_corpus/policies/defaults/curriculum.yaml"
+
+stages:
+  - license_gate
+  - sanitize
+  - exact_dedup
+  - quality_gate
+  - pii_policy_gate
+  - semantic_simhash
+  - curriculum_eligibility
