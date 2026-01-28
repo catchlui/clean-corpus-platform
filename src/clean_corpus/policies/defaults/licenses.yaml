@@ -1,0 +1,5 @@
+# Allowed/disallowed license policy.
+# If a source does not provide license metadata, treat it as Unknown and reject.
+allowed_licenses: ["CC0", "CC-BY", "CC-BY-SA", "Public-Domain"]
+disallowed_licenses: ["CC-NC", "CC-ND", "All-Rights-Reserved", "Proprietary", "Unknown", null]
+require_source_url: false

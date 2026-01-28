@@ -1,0 +1,4 @@
+ray:
+  address: "auto"
+  num_cpus: 8
+  num_gpus: 0

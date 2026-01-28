@@ -1,0 +1,5 @@
+enabled: true
+mode: redact
+confidence_threshold: 0.9
+drop_kinds: ["aadhaar"]
+redact_kinds: ["email", "phone", "aadhaar"]

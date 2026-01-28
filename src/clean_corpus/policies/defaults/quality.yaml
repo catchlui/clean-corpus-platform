@@ -1,0 +1,4 @@
+min_chars: 200
+entropy:
+  min: 3.5
+  max: 7.8
