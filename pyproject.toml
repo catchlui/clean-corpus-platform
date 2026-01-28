@@ -1,0 +1,24 @@
+[project]
+name = "clean-corpus-platform"
+version = "0.6.0"
+description = "Policy-driven, restartable, analytics-first corpus preprocessing platform (Ray-ready)."
+requires-python = ">=3.10"
+authors = [{name="Clean Corpus Team"}]
+dependencies = [
+  "pyyaml>=6.0",
+  "pydantic>=2.0",
+  "datasets>=2.18.0",
+  "pyarrow>=14.0.0",
+  "tqdm>=4.66.0",
+  "rich>=13.0.0",
+  "ray[default]>=2.10.0",
+  "datasketch>=1.6.5",
+  "numpy>=1.26.0",
+]
+
+[project.scripts]
+clean-corpus = "clean_corpus.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
