@@ -1,23 +1,84 @@
 run:
-  run_id: "CleanPile-v1_2026-01-28"
-  out_dir: "storage"
-  shard_docs: 5000
-  log_every_docs: 1000
+  # Auto-generate run_id from first source name + timestamp (prefix_digits + suffix_digits)
+  run_id_auto:
+    enabled: true
+    prefix_digits: 4
+    suffix_digits: 6
+    include_input_name: true
+    input_name_from: "source"
+    separator: "_"
+  out_dir: "Input-output-exec/runs/{run_id}"   # {run_id} replaced with resolved run_id
+  shard_docs: 2000
+  log_every_docs: 500
   checkpoint_every_docs: 5000
   policy_version: "policy_v1"
 
 execution:
   mode: "local"     # local | ray
 
+# All input/output/exec artifacts under Input-output-exec/ (data, runs, logs, checkpoints, fingerprints)
+global:
+  checkpoint_dir: "Input-output-exec/checkpoints"
+  log_dir: "Input-output-exec/logs"
+  processing:
+    global_fingerprints:
+      enabled: true
+      root_path: "Input-output-exec/fingerprints_global"
+      # Priority by document type (family): books > wiki > commoncrawl; within same type, drop incoming (random) or use source_priority
+      document_type_priority: ["books", "wiki", "commoncrawl"]
+      source_to_document_type:
+        class4_hindi_veena: "books"
+        dolma_hf: "commoncrawl"
+      # Optional: within same type, use this order (first = highest). Omit to keep existing (drop incoming) within family.
+      # source_priority: ["class4_hindi_veena", "dolma_hf"]
+      simhash:
+        enabled: true
+        max_hamming: 3
+      minhash:
+        enabled: true
+        threshold: 0.9
+        ngram: 5
+        num_perm: 128
+      chunk_hash:
+        enabled: true
+        chunk_size: 512
+        chunk_overlap: 0
+
+# Global PDF config for NCERT source
+pdf:
+  chunk_mode: "page"
+  extractor: "pymupdf"
+  min_text_length: 200
+  metadata_fields: ["title", "author", "page_number", "language"]
+  schema:
+    default_license: "CC-BY-NC"
+    metadata_mapping:
+      document_title: "title"
+      document_author: "author"
+      document_language: "language"
+
 sources:
-  - name: "common_pile"
-    type: "streaming"
-    kind: "hf_stream"
-    dataset: "common-pile/comma_v0.1_training_dataset"
-    split: "train"
-    text_field: "text"
-    license_field: "license"
-    url_field: "url"
+  # Dolma HF: uncomment when torch/datasets load OK on this machine (DLL error on Windows otherwise)
+  # - name: "dolma_hf"
+  #   type: "streaming"
+  #   kind: "hf_stream"
+  #   dataset: "allenai/dolma"
+  #   config: "v1_7"
+  #   split: "train"
+  #   text_field: "text"
+  #   license_field: "license"
+  #   url_field: "url"
+
+  - name: "class4_hindi_veena"
+    type: "batch"
+    kind: "pdf"
+    dataset: "Input-output-exec/data/class4_hindi_veena/dhve101.pdf"
+    metadata:
+      source: "NCERT"
+      license: "CC-BY-NC"
+      category: "textbook"
+      subject: "Hindi"
+      publisher: "National Council of Educational Research and Training"
 
 policies:
   licenses: "src/clean_corpus/policies/defaults/licenses.yaml"
@@ -25,18 +86,24 @@ policies:
   pii: "src/clean_corpus/policies/defaults/pii.yaml"
   curriculum: "src/clean_corpus/policies/defaults/curriculum.yaml"
 
+# Canonical order: Normalize → PII (before dedup!) → Dedup → Quality → Metadata (see docs/PIPELINE_ORDER.md)
 stages:
   - license_gate
   - sanitize
+  - unicode_normalize
+  - pii_policy_gate       # PII before dedup (legal/safe)
   - exact_dedup
-  - quality_gate
-  - pii_policy_gate
-  - near_dup_minhash
-  - semantic_simhash
+  - global_dedup         # Uses source_priority above; keep NCERT, drop Dolma on match
+  # - near_dup_minhash   # Optional: needs datasketch
+  # - semantic_simhash   # Optional: needs datasketch
+  - quality_gate          # Quality after dedup
   - curriculum_eligibility
-  - tokenize
-  # tokenization + topics are intentionally left as plugins for Tokenizer/Curriculum teams
+  # - tokenize           # Optional: needs tokenizer adapter
 
 output:
-  corpus_format: parquet       # parquet | jsonl
-  metadata_format: parquet_v1  # currently only parquet_v1
+  data_tag: "training"     # For filtering: training | sft | alignment (optional per-source override)
+  layout: "flat"
+  corpus_format: "dolma"   # parquet | jsonl | dolma
+  format_options:
+    dolma:
+      include_all_metadata: true

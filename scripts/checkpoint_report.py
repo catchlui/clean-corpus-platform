@@ -20,7 +20,28 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 
 def load_checkpoint(out_dir: str, run_id: str) -> Optional[Dict[str, Any]]:
-    """Load checkpoint file."""
+    """Load checkpoint file.
+    
+    Checks both:
+    1. Global checkpoint directory (from manifest or default 'checkpoints/')
+    2. Output directory checkpoints (legacy location)
+    """
+    # Try to get global checkpoint dir from manifest
+    manifest = load_manifest(out_dir)
+    global_checkpoint_dir = "checkpoints"  # default
+    if manifest:
+        checkpoint_path_from_manifest = manifest.get("paths", {}).get("checkpoint")
+        if checkpoint_path_from_manifest:
+            # Extract directory from full path
+            global_checkpoint_dir = os.path.dirname(checkpoint_path_from_manifest)
+    
+    # Try global checkpoint directory first
+    ckpt_path = os.path.join(global_checkpoint_dir, f"{run_id}.json")
+    if os.path.exists(ckpt_path):
+        with open(ckpt_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    
+    # Fallback to legacy location
     ckpt_path = os.path.join(out_dir, "checkpoints", f"{run_id}.json")
     if os.path.exists(ckpt_path):
         with open(ckpt_path, 'r', encoding='utf-8') as f:
@@ -73,7 +94,7 @@ def generate_report(out_dir: str, run_id: Optional[str] = None, config_path: Opt
                     run_id = Path(ckpt_files[0]).stem
     
     if not run_id:
-        print(f"❌ Error: Could not determine run_id for {out_dir}")
+        print(f"[ERROR] Could not determine run_id for {out_dir}")
         print("   Specify run_id: python scripts/checkpoint_report.py <out_dir> <run_id>")
         sys.exit(1)
     
@@ -95,8 +116,16 @@ def generate_report(out_dir: str, run_id: Optional[str] = None, config_path: Opt
     print(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
     
     if not checkpoint:
-        print("⚠️  No checkpoint file found.")
-        print(f"   Expected: {out_dir}/checkpoints/{run_id}.json")
+        print("[WARNING] No checkpoint file found.")
+        # Try to get global checkpoint dir from manifest
+        global_checkpoint_dir = "checkpoints"  # default
+        if manifest:
+            checkpoint_path_from_manifest = manifest.get("paths", {}).get("checkpoint")
+            if checkpoint_path_from_manifest:
+                global_checkpoint_dir = os.path.dirname(checkpoint_path_from_manifest)
+        
+        print(f"   Checked: {global_checkpoint_dir}/{run_id}.json")
+        print(f"   Also checked: {out_dir}/checkpoints/{run_id}.json")
         print("\n   This run may not have started yet, or checkpointing is disabled.")
         return
     
@@ -117,7 +146,7 @@ def generate_report(out_dir: str, run_id: Optional[str] = None, config_path: Opt
     # Sources status
     sources = checkpoint.get('sources', {})
     if not sources:
-        print("⚠️  No source progress found in checkpoint.")
+        print("[WARNING] No source progress found in checkpoint.")
         print("   Run may not have processed any sources yet.\n")
         return
     
@@ -162,7 +191,7 @@ def generate_report(out_dir: str, run_id: Optional[str] = None, config_path: Opt
                     file_size = os.path.getsize(dataset)
                     print(f"  File Size: {file_size:,} bytes ({file_size / 1024 / 1024:.2f} MB)")
                 else:
-                    print(f"  ⚠️  File not found: {dataset}")
+                    print(f"  [WARNING] File not found: {dataset}")
             
             print(f"  License Field: {src_cfg.get('license_field', 'license')}")
             print(f"  URL Field: {src_cfg.get('url_field', 'url')}")
@@ -173,7 +202,7 @@ def generate_report(out_dir: str, run_id: Optional[str] = None, config_path: Opt
         print(f"  Actual Output Shards: {actual_shards}")
         
         if shard_idx != actual_shards:
-            print(f"  ⚠️  Mismatch: Checkpoint shows {shard_idx} shards, but {actual_shards} exist")
+            print(f"  [WARNING] Mismatch: Checkpoint shows {shard_idx} shards, but {actual_shards} exist")
             print(f"     Possible incomplete write or manual deletion")
         
         # Resume info
@@ -183,11 +212,12 @@ def generate_report(out_dir: str, run_id: Optional[str] = None, config_path: Opt
         
         # Check if source is complete
         if processed > 0 and actual_shards > 0:
-            print(f"    - Status: {'✅ Complete' if shard_idx == actual_shards else '⚠️  In Progress'}")
+            status = "Complete" if shard_idx == actual_shards else "In Progress"
+            print(f"    - Status: {'[OK]' if shard_idx == actual_shards else '[IN PROGRESS]'} {status}")
         elif processed == 0:
-            print(f"    - Status: ⏳ Not Started")
+            print(f"    - Status: [NOT STARTED]")
         else:
-            print(f"    - Status: ⚠️  Checkpointed but no output found")
+            print(f"    - Status: [WARNING] Checkpointed but no output found")
         
         print()
     
@@ -259,14 +289,14 @@ def generate_report(out_dir: str, run_id: Optional[str] = None, config_path: Opt
     print("=" * 70)
     print("IMPORTANT NOTES")
     print("=" * 70 + "\n")
-    print("⚠️  Checkpoint Resume Limitations:")
+    print("[WARNING] Checkpoint Resume Limitations:")
     print("  - Streaming sources: Best-effort resume (skips N records)")
     print("  - Not deterministic for non-seekable streams")
     print("  - Exact dedup state is lost on restart (will reprocess)")
-    print("\n✅ Safe to Resume:")
+    print("\n[OK] Safe to Resume:")
     print("  - Batch sources (local_jsonl)")
     print("  - Deterministic sources")
-    print("\n⚠️  May Need Rerun:")
+    print("\n[WARNING] May Need Rerun:")
     print("  - If checkpoint is very old")
     print("  - If source data changed")
     print("  - If you need exact dedup across full run")

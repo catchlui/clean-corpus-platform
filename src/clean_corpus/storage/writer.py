@@ -38,7 +38,8 @@ def docs_schema() -> pa.Schema:
         ("policy_version", pa.string()),
         ("transform_chain", pa.list_(pa.string())),
         ("created_at_ms", pa.int64()),
-    ], metadata={"schema_version": "v2"})  # Version bump due to int32->int64 change
+        ("extra_metadata", pa.string()),  # JSON string containing custom metadata (book_name, author, certificate_type, etc.)
+    ], metadata={"schema_version": "v3"})  # Version bump: added extra_metadata field
 
 def write_docs_shard(path: str, docs: List[Document]) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -86,6 +87,17 @@ def write_docs_shard(path: str, docs: List[Document]) -> None:
             "transform_chain": [str(x) for x in (d.transform_chain or [])],
             "created_at_ms": safe_int64(d.created_at_ms) if d.created_at_ms is not None else 0,
         }
+        
+        # Add extra metadata (folder-level metadata, PDF metadata, etc.)
+        # Note: For Parquet, we store extra metadata as a JSON string in a separate column
+        # This includes: book_name, author, certificate_type, pdf_metadata, etc.
+        if d.extra:
+            # Store extra metadata as JSON string for Parquet compatibility
+            import json
+            row["extra_metadata"] = json.dumps(d.extra, ensure_ascii=False)
+        else:
+            row["extra_metadata"] = None
+        
         rows.append(row)
     
     # Create table with explicit schema

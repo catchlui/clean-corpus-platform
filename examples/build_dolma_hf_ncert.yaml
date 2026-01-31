@@ -1,0 +1,74 @@
+# Process Dolma data from Hugging Face + NCERT PDFs together, output in Dolma format.
+# Usage: python scripts/run_pipeline.py examples/build_dolma_hf_ncert.yaml
+#
+# Note: allenai/dolma is large; use a smaller config (e.g. v1_6-sample) or limit
+# checkpoint_every_docs / run time for a quick test. For full Dolma v1.7 use config: "v1_7".
+
+run:
+  run_id: "Dolma_HF_NCERT_2026-01-30"
+  out_dir: "storage_dolma_hf_ncert"
+  shard_docs: 2000
+  log_every_docs: 500
+  checkpoint_every_docs: 5000
+  policy_version: "policy_v1"
+
+execution:
+  mode: local
+
+# Global PDF config for NCERT source
+pdf:
+  chunk_mode: "page"
+  extractor: "pymupdf"
+  min_text_length: 200
+  metadata_fields: ["title", "author", "page_number", "language"]
+  schema:
+    default_license: "CC-BY-NC"
+    metadata_mapping:
+      document_title: "title"
+      document_author: "author"
+      document_language: "language"
+
+sources:
+  # 1) Dolma from Hugging Face (v1_7 = Dolma 1.7; use v1_6-sample for a smaller test)
+  - name: "dolma_hf"
+    type: "streaming"
+    kind: "hf_stream"
+    dataset: "allenai/dolma"
+    config: "v1_7"
+    split: "train"
+    text_field: "text"
+    license_field: "license"
+    url_field: "url"
+
+  # 2) NCERT: one book from data folder (or use data/class4_hindi_veena/ for all PDFs)
+  - name: "class4_hindi_veena"
+    type: "batch"
+    kind: "pdf"
+    dataset: "data/class4_hindi_veena/dhve101.pdf"
+    metadata:
+      source: "NCERT"
+      license: "CC-BY-NC"
+      category: "textbook"
+      subject: "Hindi"
+      publisher: "National Council of Educational Research and Training"
+
+policies:
+  licenses: "src/clean_corpus/policies/defaults/licenses.yaml"
+  quality: "src/clean_corpus/policies/defaults/quality.yaml"
+  pii: "src/clean_corpus/policies/defaults/pii.yaml"
+  curriculum: "src/clean_corpus/policies/defaults/curriculum.yaml"
+
+stages:
+  - license_gate
+  - sanitize
+  - pii_policy_gate
+  - exact_dedup
+  - quality_gate
+  - curriculum_eligibility
+
+output:
+  layout: "flat"
+  corpus_format: "dolma"
+  format_options:
+    dolma:
+      include_all_metadata: true

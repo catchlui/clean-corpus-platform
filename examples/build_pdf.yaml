@@ -37,6 +37,13 @@ sources:
     kind: "pdf"
     dataset: "data/papers/"  # Directory containing PDF files
     # chunk_mode, extractor, etc. inherit from global pdf config
+    
+    # Folder-level metadata (applied to all PDFs in folder)
+    metadata:
+      book_name: "Research Papers Collection"
+      author: "Various Authors"
+      category: "Research"
+      license: "CC-BY"
   
   # Process entire PDFs as single documents (overrides global chunk_mode)
   - name: "reports"
@@ -45,6 +52,13 @@ sources:
     dataset: "data/reports/"  # Directory of PDF files
     chunk_mode: "document"   # Override: extract entire PDF as one document
     min_text_length: 500     # Override: higher minimum length
+    
+    # Folder-level metadata
+    metadata:
+      book_name: "Annual Reports"
+      author: "Company Name"
+      certificate_type: "Corporate"
+      license: "CC-BY-NC"
   
   # Process PDFs with fixed-size chunking (overrides global chunk_mode)
   - name: "long_documents"

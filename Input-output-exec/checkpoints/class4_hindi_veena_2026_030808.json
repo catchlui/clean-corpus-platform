@@ -1,0 +1,19 @@
+{
+  "sources": {
+    "class4_hindi_veena": {
+      "processed_docs": 16,
+      "shard_idx": 1,
+      "file_stats": {
+        "unknown": {
+          "processed": 16,
+          "written": 6,
+          "rejected": 10
+        }
+      }
+    }
+  },
+  "resume_mode": "auto",
+  "run_id": "class4_hindi_veena_2026_030808",
+  "start_time_ms": 1769828888101,
+  "updated_at_ms": 1769828888900
+}

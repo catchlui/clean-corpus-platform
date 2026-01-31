@@ -29,6 +29,7 @@ from ..sources.registry import make_source
 from ..analytics.sink import AnalyticsSink
 from ..analytics.schemas import make_event
 from ..checkpoints.store import CheckpointStore
+from ..run_id import resolve_run_id, resolve_out_dir
 from ..utils.hashing import sha256_bytes
 from ..writers.registry import get_corpus_writer, get_metadata_writer
 
@@ -36,8 +37,10 @@ log = logging.getLogger("clean_corpus.ray_data")
 
 def build_ray_data(cfg: Dict[str, Any], ray_cfg: Dict[str, Any]) -> None:
     run = cfg["run"]
-    run_id = run["run_id"]
-    out_dir = run["out_dir"]
+    run_id = resolve_run_id(cfg)
+    out_dir = resolve_out_dir(cfg, run_id)
+    run["run_id"] = run_id
+    run["out_dir"] = out_dir
     ckpt_every = int(run.get("checkpoint_every_docs", 10_000))
     policy_version = run.get("policy_version", "policy_v0")
 
@@ -61,9 +64,17 @@ def build_ray_data(cfg: Dict[str, Any], ray_cfg: Dict[str, Any]) -> None:
     from ..stages.registry import make_stages
     stages = make_stages(cfg.get("stages", []), cfg["policies"], tokenizer_name=tokenizer_name)
 
-    # writers
+    # writers (register s3_parquet when output is to S3)
     out_cfg = cfg.get("output", {}) or {}
-    corpus_writer = get_corpus_writer(out_cfg.get("corpus_format", "parquet"))
+    corpus_format = out_cfg.get("corpus_format", "parquet")
+    if corpus_format == "s3_parquet" and run.get("storage") and run["storage"].get("type") == "s3":
+        from ..writers.registry import list_corpus_writers, register_corpus_writer
+        if "s3_parquet" not in list_corpus_writers():
+            from ..storage.base import get_storage_backend
+            from ..writers.s3_parquet import S3ParquetCorpusWriter
+            backend = get_storage_backend(run["storage"])
+            register_corpus_writer("s3_parquet", S3ParquetCorpusWriter(backend))
+    corpus_writer = get_corpus_writer(corpus_format)
     meta_writer = get_metadata_writer(out_cfg.get("metadata_format", "parquet_v1"))
 
     for s_cfg in cfg["sources"]:

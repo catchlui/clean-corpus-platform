@@ -9,7 +9,7 @@ Design goal:
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import time
 
 @dataclass
@@ -47,6 +47,13 @@ class Document:
     policy_version: str = "policy_v0"
     transform_chain: List[str] = field(default_factory=list)
     created_at_ms: int = field(default_factory=lambda: int(time.time() * 1000))
+
+    # data use tag (training | sft | alignment | etc.) for downstream filtering
+    data_tag: Optional[str] = None
+
+    # custom metadata (folder-level metadata, PDF metadata, etc.)
+    # Can include: book_name, author, certificate_type, and other custom fields
+    extra: Dict[str, Any] = field(default_factory=dict)
 
 @dataclass
 class Decision:

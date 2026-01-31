@@ -1,0 +1,154 @@
+# Unified Configuration Schema for Clean Corpus Platform
+# This configuration supports:
+# - Global and entry-level processing functions
+# - Storage configuration (location, format)
+# - Execution mode (Ray vs local)
+# - Enhanced checkpoint system
+# - Unicode normalization
+# - High-scale deduplication (duplodocus)
+# - Automated domain tagging (FastText + datamap-rs)
+
+run:
+  run_id: "UnifiedExample_2026-01-30"
+  out_dir: "storage_unified"  # Storage directory for metadata and processed output
+  shard_docs: 5000
+  log_every_docs: 1000
+  checkpoint_every_docs: 5000
+  policy_version: "policy_v1"
+
+# Global checkpoint directory (outside storage)
+# Logs and checkpoints go here, metadata/docs go to storage
+global:
+  checkpoint_dir: "checkpoints"  # Global checkpoint directory
+  log_dir: "logs"  # Global log directory
+  
+  # Global processing functions (gatekeepers)
+  # These apply to all sources unless overridden
+  processing:
+    enabled: true
+    unicode_normalize: true  # Apply Unicode NFC normalization
+    deduplication:
+      enabled: true
+      method: "exact"  # exact | minhash | duplodocus
+      # For duplodocus (high-scale)
+      duplodocus:
+        enabled: false  # Set to true to use duplodocus
+        exact_match: true
+        minhash: true
+        disk_based: true  # Use disk-based processing to save RAM
+        threshold: 0.9
+    
+    domain_tagging:
+      enabled: false  # Set to true to enable domain tagging
+      method: "fasttext_datamap"  # fasttext_datamap
+      fasttext_model: null  # Path to FastText model (auto-download if null)
+      datamap_config: null  # Path to datamap-rs config
+
+# Execution configuration
+execution:
+  mode: "local"  # local | ray | ray_data
+  ray_config: null  # Path to Ray config file (optional)
+
+# Global PDF configuration (applies to all PDF sources)
+# Only needed if you have PDF sources. Install dependencies:
+#   pip install pymupdf  # Recommended for best text extraction
+#   # OR
+#   pip install pdfplumber  # Alternative PDF extractor
+pdf:
+  chunk_mode: "page"  # page | document | fixed_size
+  extractor: "pymupdf"  # pymupdf | pdfplumber | pypdf2
+  min_text_length: 200
+  metadata_fields: ["title", "author", "page_number"]
+  
+  chunk_size: 1000  # For fixed_size mode
+  chunk_overlap: 200
+  
+  schema:
+    default_license: "CC-BY"
+    text_prefix: ""
+    text_suffix: ""
+    metadata_mapping:
+      document_title: "title"
+      document_author: "author"
+
+# Sources configuration
+# Each source can override global processing settings
+sources:
+  - name: "example_jsonl"
+    type: "batch"
+    kind: "local_jsonl"
+    dataset:
+      - "examples/sample_internal.jsonl"
+      - "examples/sample_additional.jsonl"
+    text_field: "text"
+    license_field: "license"
+    url_field: "url"
+    
+    # Entry-level processing overrides (optional)
+    # If not specified, uses global settings
+    processing:
+      unicode_normalize: true  # Override global setting
+      deduplication:
+        enabled: true
+        method: "exact"  # Override: use exact match for this source
+  
+  # PDF source example (commented out - requires pymupdf: pip install pymupdf)
+  # Uncomment and install dependencies if you need PDF processing
+  # - name: "example_pdf"
+  #   type: "batch"
+  #   kind: "pdf"
+  #   dataset: "data/papers/"
+  #   
+  #   # Override global PDF config
+  #   chunk_mode: "document"
+  #   min_text_length: 500
+  #   
+  #   # Override global processing
+  #   processing:
+  #     deduplication:
+  #       method: "minhash"  # Use MinHash for PDFs
+
+# Policies
+policies:
+  licenses: "src/clean_corpus/policies/defaults/licenses.yaml"
+  quality: "src/clean_corpus/policies/defaults/quality.yaml"
+  pii: "src/clean_corpus/policies/defaults/pii.yaml"
+  curriculum: "src/clean_corpus/policies/defaults/curriculum.yaml"
+
+# Processing stages
+# Stages are applied in order
+# Global processing functions are applied automatically based on config
+stages:
+  - license_gate
+  - sanitize
+  - unicode_normalize  # Unicode NFC normalization
+  - exact_dedup  # Will be replaced by duplodocus if enabled
+  - quality_gate
+  - pii_policy_gate
+  - semantic_simhash
+  - curriculum_eligibility
+  # Domain tagging stage will be added automatically if enabled
+
+# Output configuration
+output:
+  corpus_format: "parquet"  # parquet | jsonl | dolma | doml
+  metadata_format: "parquet_v1"
+  
+  # Format-specific options (optional)
+  format_options:
+    dolma:  # or doml (DOML is alias for DOLMA)
+      include_all_metadata: true  # Include all available metadata fields
+      custom_metadata_fields:
+        # dataset_version: "v1.0"
+        # processing_date: "2026-01-30"
+  
+  # Storage structure:
+  # - Metadata files: {out_dir}/metadata/
+  # - Processed output: {out_dir}/docs/
+  # - Checkpoints: {global.checkpoint_dir}/
+  # - Logs: {global.log_dir}/
+
+# Checkpoint configuration
+checkpoint:
+  resume_mode: "auto"  # auto | beginning | checkpoint | ignore
+  checkpoint_id: null  # Specific checkpoint ID (only used if resume_mode="checkpoint")

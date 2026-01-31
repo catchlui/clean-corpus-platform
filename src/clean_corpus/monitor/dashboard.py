@@ -336,23 +336,91 @@ def get_latest_log_lines(out_dir: str, run_id: str, lines: int = 10) -> List[str
             pass
     return []
 
-def create_dashboard(out_dir: str, refresh_interval: float = 5.0):
-    """Create and display real-time dashboard."""
-    console = Console()
+def create_dashboard(out_dir: str, refresh_interval: float = 5.0, use_simple_mode: bool = False, debug: bool = False):
+    """Create and display real-time dashboard.
+    
+    Args:
+        out_dir: Output directory to monitor
+        refresh_interval: Refresh interval in seconds
+        use_simple_mode: If True, use simple text output instead of Rich formatting
+        debug: If True, print debug information
+    """
+    # Debug mode: print diagnostic information
+    if debug:
+        print("=== Monitor Debug Mode ===")
+        print(f"Output directory: {out_dir}")
+        print(f"Directory exists: {os.path.exists(out_dir)}")
+        
+        manifest_dir = os.path.join(out_dir, "manifests")
+        print(f"Manifests directory: {manifest_dir}")
+        print(f"Manifests exists: {os.path.exists(manifest_dir)}")
+        
+        if os.path.exists(manifest_dir):
+            manifest_files = glob.glob(os.path.join(manifest_dir, "*.json"))
+            print(f"Manifest files found: {len(manifest_files)}")
+            for mf in manifest_files:
+                print(f"  - {mf}")
+        
+        checkpoint_dir = os.path.join(out_dir, "checkpoints")
+        print(f"Checkpoints directory: {checkpoint_dir}")
+        print(f"Checkpoints exists: {os.path.exists(checkpoint_dir)}")
+        
+        if os.path.exists(checkpoint_dir):
+            checkpoint_files = glob.glob(os.path.join(checkpoint_dir, "*.json"))
+            print(f"Checkpoint files found: {len(checkpoint_files)}")
+            for cf in checkpoint_files:
+                print(f"  - {cf}")
+        
+        analytics_dir = os.path.join(out_dir, "analytics")
+        print(f"Analytics directory: {analytics_dir}")
+        print(f"Analytics exists: {os.path.exists(analytics_dir)}")
+        
+        print("\nTesting Rich console...")
+        try:
+            test_console = Console()
+            test_console.print("[green]✓ Rich console works![/green]")
+            test_console.print("[yellow]Testing colors and formatting...[/yellow]")
+        except Exception as e:
+            print(f"✗ Rich console error: {e}")
+        
+        print("\nStarting dashboard...\n")
+    
+    if use_simple_mode:
+        # Simple text mode (fallback)
+        _create_simple_dashboard(out_dir, refresh_interval)
+        return
+    
+    try:
+        console = Console(force_terminal=True)  # Force terminal output
+    except Exception as e:
+        print(f"Warning: Could not initialize Rich console: {e}")
+        print("Falling back to simple text mode...\n")
+        _create_simple_dashboard(out_dir, refresh_interval)
+        return
     
     # Find latest run
     manifest = load_manifest(out_dir)
     if not manifest:
         console.print(f"[red]No run found in {out_dir}[/red]")
-        console.print("Run a pipeline first: clean-corpus build --config examples/build_local_jsonl.yaml")
+        console.print("Run a pipeline first: python -m clean_corpus.cli build --config examples/build_local_jsonl.yaml")
+        console.print(f"\n[dim]Looking for manifest in: {os.path.join(out_dir, 'manifests')}[/dim]")
+        if os.path.exists(out_dir):
+            manifest_dir = os.path.join(out_dir, "manifests")
+            if os.path.exists(manifest_dir):
+                files = os.listdir(manifest_dir)
+                console.print(f"[dim]Files in manifests directory: {files}[/dim]")
         return
     
     run_id = manifest.get('run_id', 'unknown')
     
+    # Print initial header (before clearing)
     console.print(f"\n[bold cyan]Clean Corpus Platform - Real-Time Dashboard[/bold cyan]")
     console.print(f"[dim]Monitoring: {out_dir} | Run ID: {run_id}[/dim]")
     console.print("[dim]READ-ONLY mode - Safe to start/stop anytime without affecting pipeline[/dim]")
     console.print("[dim]Press Ctrl+C to exit[/dim]\n")
+    
+    # Wait a moment so user can see initial message
+    time.sleep(0.5)
     
     start_time = time.time()
     
@@ -364,17 +432,27 @@ def create_dashboard(out_dir: str, refresh_interval: float = 5.0):
             analytics_df = load_analytics(out_dir)
             log_lines = get_latest_log_lines(out_dir, run_id, 5)
             
-            # Clear screen (works on most terminals)
-            console.clear()
+            # Clear screen (with fallback for Windows)
+            try:
+                console.clear()
+            except Exception:
+                # Fallback: print newlines to simulate clearing
+                console.print("\n" * 50)
             
-            # Header
+            # Header - always print to ensure visibility
             elapsed = time.time() - start_time
-            header = Panel(
-                f"[bold]Clean Corpus Platform[/bold] | Run: [cyan]{run_id}[/cyan] | Elapsed: [yellow]{elapsed:.0f}s[/yellow]",
-                style="bold blue",
-                box=box.DOUBLE
-            )
-            console.print(header)
+            try:
+                header = Panel(
+                    f"[bold]Clean Corpus Platform[/bold] | Run: [cyan]{run_id}[/cyan] | Elapsed: [yellow]{elapsed:.0f}s[/yellow]",
+                    style="bold blue",
+                    box=box.DOUBLE
+                )
+                console.print(header)
+            except Exception as e:
+                # Fallback: simple text header
+                console.print(f"\n{'='*70}")
+                console.print(f"Clean Corpus Platform | Run: {run_id} | Elapsed: {elapsed:.0f}s")
+                console.print(f"{'='*70}\n")
             console.print()
             
             # Main stats panel
@@ -585,6 +663,90 @@ def create_dashboard(out_dir: str, refresh_interval: float = 5.0):
     except Exception as e:
         console.print(f"\n[red]Error: {e}[/red]\n")
         import traceback
+        # Print error details
+        error_details = traceback.format_exc()
+        console.print(f"[dim]{error_details}[/dim]")
+        # Also print to stderr for debugging
+        import sys
+        print(f"Monitor error: {e}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+
+def _create_simple_dashboard(out_dir: str, refresh_interval: float = 5.0):
+    """Simple text-based dashboard (fallback when Rich is not available)."""
+    import sys
+    
+    # Force output to be flushed immediately
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace') if hasattr(sys.stdout, 'reconfigure') else None
+    
+    manifest = load_manifest(out_dir)
+    if not manifest:
+        print(f"Error: No run found in {out_dir}", flush=True)
+        print("Run a pipeline first: python -m clean_corpus.cli build --config examples/build_local_jsonl.yaml", flush=True)
+        manifest_dir = os.path.join(out_dir, "manifests")
+        if os.path.exists(manifest_dir):
+            files = os.listdir(manifest_dir)
+            print(f"Files in manifests directory: {files}", flush=True)
+        return
+    
+    run_id = manifest.get('run_id', 'unknown')
+    start_time = time.time()
+    
+    print(f"\n{'='*70}", flush=True)
+    print(f"Clean Corpus Platform - Real-Time Dashboard (Simple Mode)", flush=True)
+    print(f"{'='*70}", flush=True)
+    print(f"Monitoring: {out_dir}", flush=True)
+    print(f"Run ID: {run_id}", flush=True)
+    print(f"Press Ctrl+C to exit\n", flush=True)
+    
+    try:
+        while True:
+            manifest = load_manifest(out_dir)
+            checkpoint = load_checkpoint(out_dir, run_id)
+            
+            # Clear screen (simple) - use os.system for Windows
+            if sys.platform == 'win32':
+                os.system('cls')
+            else:
+                os.system('clear')
+            
+            print(f"{'='*70}", flush=True)
+            print(f"Run: {run_id} | Elapsed: {time.time() - start_time:.0f}s", flush=True)
+            print(f"{'='*70}\n", flush=True)
+            
+            if manifest:
+                total_written = manifest.get('total_written_docs', 0)
+                total_rejected = manifest.get('total_rejected_docs', 0)
+                total_processed = total_written + total_rejected
+                success_rate = (total_written / total_processed * 100) if total_processed > 0 else 0
+                
+                print(f"Total Processed: {total_processed:,}", flush=True)
+                print(f"Written: {total_written:,}", flush=True)
+                print(f"Rejected: {total_rejected:,}", flush=True)
+                print(f"Success Rate: {success_rate:.1f}%\n", flush=True)
+                
+                if checkpoint:
+                    sources = checkpoint.get('sources', {})
+                    if sources:
+                        print("Sources:", flush=True)
+                        for src_name, src_info in sources.items():
+                            processed = src_info.get('processed_docs', 0)
+                            shards = src_info.get('shard_idx', 0)
+                            written = src_info.get('written_docs', 0)
+                            rejected = src_info.get('rejected_docs', 0)
+                            print(f"  {src_name}: {processed:,} processed, {written:,} written, {rejected:,} rejected, {shards} shards", flush=True)
+                        print(flush=True)
+            
+            print(f"Last update: {datetime.now().strftime('%H:%M:%S')}", flush=True)
+            print(f"Refreshing every {refresh_interval}s...", flush=True)
+            print(f"{'='*70}", flush=True)
+            
+            time.sleep(refresh_interval)
+            
+    except KeyboardInterrupt:
+        print("\n\nDashboard stopped.\n", flush=True)
+    except Exception as e:
+        print(f"\nError: {e}\n", flush=True)
+        import traceback
         traceback.print_exc()
 
 def main():
@@ -599,6 +761,8 @@ Examples:
   %(prog)s storage_example
   %(prog)s storage_example --refresh 10.0
   %(prog)s storage_example -r 2.5
+  %(prog)s storage_example --debug
+  %(prog)s storage_example --simple
         """
     )
     parser.add_argument(
@@ -614,15 +778,65 @@ Examples:
         metavar="SECONDS",
         help="Refresh interval in seconds (default: 5.0)"
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug output"
+    )
+    parser.add_argument(
+        "--simple",
+        action="store_true",
+        help="Use simple text mode (no Rich formatting)"
+    )
     
     args = parser.parse_args()
     
     if not os.path.exists(args.output_dir):
         print(f"Error: Directory not found: {args.output_dir}")
-        print("Run a pipeline first: clean-corpus build --config examples/build_local_jsonl.yaml")
+        print("Run a pipeline first: python -m clean_corpus.cli build --config examples/build_local_jsonl.yaml")
         sys.exit(1)
     
-    create_dashboard(args.output_dir, args.refresh)
+    if args.debug:
+        # Debug mode: print diagnostic information
+        print("=== Monitor Debug Mode ===")
+        print(f"Output directory: {args.output_dir}")
+        print(f"Directory exists: {os.path.exists(args.output_dir)}")
+        
+        manifest_dir = os.path.join(args.output_dir, "manifests")
+        print(f"Manifests directory: {manifest_dir}")
+        print(f"Manifests exists: {os.path.exists(manifest_dir)}")
+        
+        if os.path.exists(manifest_dir):
+            manifest_files = glob.glob(os.path.join(manifest_dir, "*.json"))
+            print(f"Manifest files found: {len(manifest_files)}")
+            for mf in manifest_files:
+                print(f"  - {mf}")
+        
+        checkpoint_dir = os.path.join(args.output_dir, "checkpoints")
+        print(f"Checkpoints directory: {checkpoint_dir}")
+        print(f"Checkpoints exists: {os.path.exists(checkpoint_dir)}")
+        
+        if os.path.exists(checkpoint_dir):
+            checkpoint_files = glob.glob(os.path.join(checkpoint_dir, "*.json"))
+            print(f"Checkpoint files found: {len(checkpoint_files)}")
+            for cf in checkpoint_files:
+                print(f"  - {cf}")
+        
+        analytics_dir = os.path.join(args.output_dir, "analytics")
+        print(f"Analytics directory: {analytics_dir}")
+        print(f"Analytics exists: {os.path.exists(analytics_dir)}")
+        
+        print("\nTesting Rich console...")
+        try:
+            test_console = Console()
+            test_console.print("[green]✓ Rich console works![/green]")
+            test_console.print("[yellow]Testing colors and formatting...[/yellow]")
+        except Exception as e:
+            print(f"✗ Rich console error: {e}")
+        
+        print("\nStarting dashboard...\n")
+    
+    create_dashboard(args.output_dir, args.refresh, use_simple_mode=args.simple, debug=args.debug)
 
 if __name__ == "__main__":
     main()

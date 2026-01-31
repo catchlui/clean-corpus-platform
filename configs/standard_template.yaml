@@ -1,0 +1,430 @@
+# Standard Configuration Template for Clean Corpus Platform
+# This template covers all supported data source types:
+# - Local JSONL files (single file, multiple files, directories, glob patterns)
+# - PDF files and folders
+# - Web PDFs (download from URLs)
+# - HuggingFace streaming datasets
+# - S3 storage
+#
+# Copy this file and customize for your use case.
+
+run:
+  # Run ID: set explicitly, or leave unset and use run_id_auto to generate from input name + timestamp digits
+  # run_id: "Class4_Hindi_Veena_2026-01-30"   # If set, used as-is
+  run_id_auto:
+    enabled: true
+    prefix_digits: 4       # First N digits of timestamp (e.g. 4 → year "2026")
+    suffix_digits: 6       # Last N digits of timestamp (e.g. 6 → time-ish for uniqueness)
+    include_input_name: true
+    input_name_from: "source"  # "source" = first source name | "dataset" = basename of first dataset path/dir
+    separator: "_"
+  # out_dir may use {run_id}; it is replaced with the resolved run_id (explicit or auto-generated)
+  out_dir: "runs/{run_id}"  # All runs under runs/; data in data/ (see docs/RUNS_AND_CHECKPOINTS.md)
+  shard_docs: 5000            # Documents per shard
+  log_every_docs: 1000         # Log progress every N documents
+  checkpoint_every_docs: 5000  # Save checkpoint every N documents
+  policy_version: "policy_v1"  # Policy version identifier
+
+# Global directories: checkpoints and logs live here (not inside out_dir)
+global:
+  checkpoint_dir: "checkpoints"  # One {run_id}.json per run; used for resume
+  log_dir: "logs"                # One {run_id}.log per run
+  
+  # Global processing functions (apply to all sources unless overridden)
+  processing:
+    enabled: true
+    unicode_normalize: true      # Apply Unicode NFC normalization for Indic scripts
+    
+    deduplication:
+      enabled: true
+      method: "exact"            # exact | minhash | duplodocus
+      # For high-scale deduplication (3T+ tokens)
+      duplodocus:
+        enabled: false           # Set to true for duplodocus
+        exact_match: true
+        minhash: true
+        disk_based: true         # Use disk-based processing to save RAM
+        threshold: 0.9
+
+    # Global Fingerprint Layer: deduplication across all datasets and time (not per run)
+    # When enabled, add "global_dedup" to the stages list (after exact_dedup).
+    global_fingerprints:
+      enabled: false             # Set to true for global, persistent dedupe
+      root_path: "fingerprints_global"
+      # storage: { type: local }  # Optional; default is local
+      fingerprint_version: "v1"   # Version hash params for safe rollback
+      # Priority by document type (family) first: books > wiki > commoncrawl. Within same type, drop incoming (random) or use source_priority.
+      # document_type_priority: ["books", "wiki", "commoncrawl"]
+      # source_to_document_type:
+      #   class4_hindi_veena: "books"
+      #   wikipedia_stream: "wiki"
+      #   dolma_hf: "commoncrawl"
+      # Optional: within same type, document-level priority (first = highest). Omit to keep existing (drop incoming) within family.
+      # source_priority: ["class4_hindi_veena", "dolma_hf"]
+      simhash:                   # Coarse first-pass (rehosted pages, PDF mirrors)
+        enabled: true
+        max_hamming: 3
+      minhash:                   # Semantic near-duplicate (cross-dataset)
+        enabled: true
+        threshold: 0.9
+        ngram: 5
+        num_perm: 128
+      chunk_hash:                # LLM-critical chunk dedupe (memorization)
+        enabled: true
+        chunk_size: 512
+        chunk_overlap: 0
+    
+    domain_tagging:
+      enabled: false             # Set to true to enable domain tagging
+      method: "fasttext_datamap"
+      fasttext_model: null       # Path to FastText model
+      datamap_config: null       # Path to datamap-rs config
+
+# Execution configuration
+execution:
+  mode: "local"                 # local | ray | ray_data
+  ray_config: null              # Path to Ray config file (optional)
+
+# Global PDF configuration (applies to all PDF sources)
+# Only needed if you have PDF sources
+pdf:
+  chunk_mode: "page"            # page | document | fixed_size
+  extractor: "pymupdf"          # pymupdf | pdfplumber | pypdf2
+  min_text_length: 200
+  metadata_fields: ["title", "author", "page_number"]
+  
+  chunk_size: 1000              # For fixed_size mode
+  chunk_overlap: 200
+  
+  schema:
+    default_license: "CC-BY"
+    text_prefix: ""
+    text_suffix: ""
+    metadata_mapping:
+      document_title: "title"
+      document_author: "author"
+
+# ============================================================================
+# SOURCES CONFIGURATION
+# ============================================================================
+# Configure your data sources below. You can have multiple sources.
+# Each source type has different configuration options.
+
+sources:
+  # --------------------------------------------------------------------------
+  # ACTIVE SOURCE: Class 4 Hindi Veena (Document Chunking)
+  # --------------------------------------------------------------------------
+  # This is the active configuration - uncomment and customize as needed
+  - name: "class4_hindi_veena"
+    type: "batch"
+    kind: "pdf"
+    dataset: "data/class4_hindi_veena/"  # Directory containing Class 4 Hindi Veena PDFs
+    chunk_mode: "document"               # Each PDF file = one document (entire PDF as one chunk)
+    min_text_length: 100
+    # data_tag: "training"               # Optional: overrides output.data_tag for this source
+
+    # Folder-level metadata (applied to all PDFs in this folder)
+    metadata:
+      class: "4"
+      language: "hi"                     # Hindi (ISO 639-1 code)
+      book_name: "Veena"
+      certificate_type: "Textbook"
+      subject: "Hindi"
+      grade: "Class 4"
+      license: "CC-BY"
+
+  # --------------------------------------------------------------------------
+  # SOURCE TYPE 1: Local JSONL Files
+  # --------------------------------------------------------------------------
+  # Option A: Single JSONL file
+  # - name: "single_file"
+  #   type: "batch"
+  #   kind: "local_jsonl"
+  #   dataset: "data/myfile.jsonl"  # Path to single JSONL file
+  #   text_field: "text"
+  #   license_field: "license"
+  #   url_field: "url"
+  
+  # Option B: Multiple JSONL files (processed together)
+  # - name: "multiple_files"
+  #   type: "batch"
+  #   kind: "local_jsonl"
+  #   dataset:
+  #     - "data/file1.jsonl"
+  #     - "data/file2.jsonl"
+  #     - "data/file3.jsonl"
+  #   text_field: "text"
+  #   license_field: "license"
+  #   url_field: "url"
+  
+  # Option C: Directory (processes all .jsonl files recursively)
+  # - name: "directory_source"
+  #   type: "batch"
+  #   kind: "local_jsonl"
+  #   dataset: "data/jsonl_files/"  # Directory path
+  #   text_field: "text"
+  #   license_field: "license"
+  #   url_field: "url"
+  
+  # Option D: Glob pattern (matches files by pattern)
+  # - name: "glob_pattern"
+  #   type: "batch"
+  #   kind: "local_jsonl"
+  #   dataset: "data/*.jsonl"  # Glob pattern
+  #   text_field: "text"
+  #   license_field: "license"
+  #   url_field: "url"
+  
+  # --------------------------------------------------------------------------
+  # SOURCE TYPE 2: PDF Files and Folders
+  # --------------------------------------------------------------------------
+  # Option A: Single PDF file
+  # - name: "single_pdf"
+  #   type: "batch"
+  #   kind: "pdf"
+  #   dataset: "data/document.pdf"  # Path to single PDF file
+  #   chunk_mode: "document"        # Override global: entire PDF as one document
+  #   min_text_length: 500
+  
+  # Option B: PDF folder (processes all PDFs in directory)
+  # - name: "pdf_folder"
+  #   type: "batch"
+  #   kind: "pdf"
+  #   dataset: "data/papers/"       # Directory containing PDF files
+  #   chunk_mode: "page"            # Each page becomes a document
+  #   min_text_length: 200
+  #   
+  #   # Folder-level metadata (applied to all PDFs in this folder)
+  #   metadata:
+  #     book_name: "Research Papers Collection"
+  #     author: "Various Authors"
+  #     certificate_type: "Academic"
+  #     category: "Research"
+  #     license: "CC-BY"
+  
+  # Option C: PDF folder with document-level chunking
+  # - name: "pdf_documents"
+  #   type: "batch"
+  #   kind: "pdf"
+  #   dataset: "data/chapters/"     # Directory of PDF files
+  #   chunk_mode: "document"        # Each PDF file = one document
+  #   min_text_length: 100
+  #   
+  #   # Folder-level metadata (applied to all PDFs in this folder)
+  #   metadata:
+  #     book_name: "Textbook Chapters"
+  #     author: "John Doe"
+  #     publisher: "Example Publisher"
+  #     license: "CC-BY-NC"
+  
+  # Option C1: Class 4 Hindi Veena - Document chunking example (COMMENTED OUT - already active above)
+  # - name: "class4_hindi_veena"
+  #   type: "batch"
+  #   kind: "pdf"
+  #   dataset: "data/class4_hindi_veena/"  # Directory containing Class 4 Hindi Veena PDFs
+  #   chunk_mode: "document"               # Each PDF file = one document (entire PDF as one chunk)
+  #   min_text_length: 100
+  #   
+  #   # Folder-level metadata (applied to all PDFs in this folder)
+  #   metadata:
+  #     class: "4"
+  #     language: "hi"                     # Hindi (ISO 639-1 code)
+  #     book_name: "Veena"
+  #     certificate_type: "Textbook"
+  #     subject: "Hindi"
+  #     grade: "Class 4"
+  #     license: "CC-BY"
+  
+  # Option D: PDF folder with fixed-size chunking
+  # - name: "pdf_chunked"
+  #   type: "batch"
+  #   kind: "pdf"
+  #   dataset: "data/long_docs/"
+  #   chunk_mode: "fixed_size"     # Split into fixed-size chunks
+  #   chunk_size: 2000              # Characters per chunk
+  #   chunk_overlap: 400            # Overlap between chunks
+  
+  # --------------------------------------------------------------------------
+  # SOURCE TYPE 3: Web PDFs (Download from URLs)
+  # --------------------------------------------------------------------------
+  # Option A: Specific PDF URLs
+  # - name: "web_pdfs_urls"
+  #   type: "batch"
+  #   kind: "web_pdf"
+  #   urls:
+  #     - "https://example.com/document1.pdf"
+  #     - "https://example.com/document2.pdf"
+  #   download_dir: "downloads/web_pdfs"
+  #   language: "en"                # ISO 639-1 code (en, hi, ta, etc.)
+  #   auto_detect_language: true
+  #   timeout: 30
+  #   max_retries: 3
+  #   metadata:
+  #     source: "Example"
+  #     license: "CC-BY"
+  #     category: "documents"
+  
+  # Option B: URL pattern (scrape PDFs from website)
+  # - name: "web_pdfs_pattern"
+  #   type: "batch"
+  #   kind: "web_pdf"
+  #   url_pattern: "https://example.com/pdf/*.pdf"  # URL pattern
+  #   base_url: "https://example.com"              # Base URL for relative URLs
+  #   download_dir: "downloads/pattern_pdfs"
+  #   auto_detect_language: true
+  #   resume_download: true         # Skip already downloaded files
+  
+  # --------------------------------------------------------------------------
+  # SOURCE TYPE 4: HuggingFace Streaming Datasets
+  # --------------------------------------------------------------------------
+  # - name: "hf_streaming"
+  #   type: "streaming"
+  #   kind: "hf_stream"
+  #   dataset: "common-pile/comma_v0.1_training_dataset"  # HuggingFace dataset name
+  #   split: "train"                # Dataset split
+  #   text_field: "text"
+  #   license_field: "license"
+  #   url_field: "url"
+  
+  # --------------------------------------------------------------------------
+  # SOURCE TYPE 5: Multiple Sources (Mixed Types)
+  # --------------------------------------------------------------------------
+  # You can combine different source types in one configuration
+  # Each source processes independently with its own checkpoint
+  
+  # Example: Combine local JSONL + PDF folder + HuggingFace stream
+  # - name: "local_data"
+  #   type: "batch"
+  #   kind: "local_jsonl"
+  #   dataset: "data/local.jsonl"
+  #   text_field: "text"
+  #   license_field: "license"
+  #   url_field: "url"
+  #
+  # - name: "pdf_documents"
+  #   type: "batch"
+  #   kind: "pdf"
+  #   dataset: "data/pdfs/"
+  #   chunk_mode: "document"
+  #
+  # - name: "hf_data"
+  #   type: "streaming"
+  #   kind: "hf_stream"
+  #   dataset: "dataset/name"
+  #   split: "train"
+  #   text_field: "text"
+
+# ============================================================================
+# POLICIES
+# ============================================================================
+# Policy files define rules for licenses, quality, PII, and curriculum
+policies:
+  licenses: "src/clean_corpus/policies/defaults/licenses.yaml"
+  quality: "src/clean_corpus/policies/defaults/quality.yaml"
+  pii: "src/clean_corpus/policies/defaults/pii.yaml"
+  curriculum: "src/clean_corpus/policies/defaults/curriculum.yaml"
+
+# ============================================================================
+# PROCESSING STAGES (canonical order: see docs/PIPELINE_ORDER.md)
+# ============================================================================
+# Order: Ingest gate → Normalize → PII (before dedup!) → Dedup → Quality → Metadata
+stages:
+  - license_gate          # Ingest gate: filter by license
+  - sanitize              # Normalize: whitespace, HTML, control chars (no rewrite)
+  - unicode_normalize     # Normalize: Unicode NFC (before PII for better recall)
+  - pii_policy_gate       # PII HARD GATE — must run before dedup (legal/safe)
+  - exact_dedup            # Dedup: exact hash (after PII so hashes are safe)
+  # - global_dedup         # Dedup: global fingerprint (add when global_fingerprints.enabled: true)
+  # - near_dup_minhash     # Dedup: near-duplicate (optional)
+  # - semantic_simhash     # Dedup: semantic (optional)
+  - quality_gate          # Quality: light-touch only (after dedup)
+  - curriculum_eligibility # Metadata enrichment
+  # Optional: - domain_tagging, - tokenize
+
+# ============================================================================
+# OUTPUT CONFIGURATION
+# ============================================================================
+output:
+  # Data use tag for downstream filtering (e.g. training | sft | alignment)
+  # Written to metadata; per-source override via sources[].data_tag
+  # data_tag: "training"
+
+  # Layout: flat (default) | structured
+  # structured = /processed/v1/ documents | rejected | stats (see docs/OUTPUT_STRUCTURE.md)
+  # layout: "structured"
+  layout: "flat"
+
+  # When layout is structured: map source names to top-level folder names
+  # source_to_namespace:
+  #   class4_hindi_veena: "ncert"
+  #   wikipedia_stream: "dolma"
+
+  # Corpus format: Choose the format for processed documents
+  # Options: parquet | jsonl | dolma | doml
+  # corpus_format: "parquet"       # Alternative: parquet (efficient for large datasets)
+  corpus_format: "jsonl"        # JSONL format (human-readable, good for streaming)
+  # corpus_format: "dolma"        # Alternative: dolma (AI2 format for LM training)
+  # corpus_format: "doml"         # Alternative: doml (alias for dolma)
+  
+  metadata_format: null         # Set to null to skip separate metadata files (all data in JSONL)
+  # metadata_format: "parquet_v1"  # Alternative: separate Parquet metadata files
+  
+  # Format-specific options (optional)
+  format_options:
+    # DOLMA/DOML format options
+    dolma:
+      include_all_metadata: true  # Include all available metadata fields
+      custom_metadata_fields:
+        # dataset_version: "v1.0"
+        # processing_date: "2026-01-30"
+  
+  # Format Comparison:
+  # - parquet: Apache Parquet (columnar storage)
+  #            ✅ Best for: Large datasets, efficient storage, analytics
+  #            ✅ File extension: .parquet
+  #            ✅ Storage efficiency: ⭐⭐⭐⭐⭐
+  #            ✅ Structure: Well-defined schema with extra_metadata field (JSON string)
+  #
+  # - jsonl: JSON Lines (one JSON object per line)
+  #          ✅ Best for: Human-readable output, streaming, debugging
+  #          ✅ File extension: .jsonl
+  #          ✅ Storage efficiency: ⭐⭐⭐
+  #          ✅ Structure: Flat JSON with all fields including custom metadata
+  #
+  # - dolma/doml: DOLMA format (AI2 corpus format)
+  #               ✅ Best for: Language model training, AI2 pipelines
+  #               ✅ File extension: .jsonl (DOLMA structure)
+  #               ✅ Storage efficiency: ⭐⭐⭐
+  #               ✅ Structure: Nested metadata object with all custom fields
+  #
+  # All formats include:
+  # - Core fields: doc_id, text, source, lang, url, license, etc.
+  # - Statistics: tokens, chars, bytes_utf8, entropy, etc.
+  # - Processing: dup_group_id, pii_flag, transform_chain, etc.
+  # - Custom metadata: book_name, author, certificate_type, pdf_metadata, etc.
+  #   (from folder-level metadata configuration)
+  #
+  # See docs/OUTPUT_STRUCTURE.md for detailed structure documentation
+
+# ============================================================================
+# CHECKPOINT CONFIGURATION
+# ============================================================================
+checkpoint:
+  resume_mode: "auto"            # auto | beginning | checkpoint | ignore
+  checkpoint_id: null            # Specific checkpoint ID (only if resume_mode="checkpoint")
+
+# ============================================================================
+# STORAGE CONFIGURATION (Optional - for S3)
+# ============================================================================
+# Local is default. Input data, output data, and analytics can optionally use S3.
+# See docs/STORAGE_LOCAL_AND_S3.md for config shape and expansion path.
+#
+# Global fingerprints (dedup) already support S3 via global.processing.global_fingerprints.storage
+# Run output (docs, rejections, manifests, analytics) expansion: run.storage (future)
+# Input (sources) expansion: per-source storage or global (future)
+#
+# Uncomment to use S3 for fingerprints (today):
+# global:
+#   processing:
+#     global_fingerprints:
+#       storage: { type: s3, bucket: my-bucket, prefix: fingerprints/, region: us-east-1 }

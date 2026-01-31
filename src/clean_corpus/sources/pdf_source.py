@@ -67,19 +67,45 @@ class PDFSource(DataSource):
         if not self.schema:
             self.schema = global_config.get("schema")
         
+        # Folder-level metadata (applied to all PDFs in folder)
+        # Can include: book_name, author, certificate_type, etc.
+        self.folder_metadata = getattr(spec, 'metadata', None) or {}
+        
         # Initialize extractor
         self.extractor = self._get_extractor()
     
     def _get_extractor(self):
         """Get PDF extractor based on configuration."""
         if self.extractor_name == 'pymupdf':
+            # Ensure user site-packages is in path (for cases where pymupdf is installed with --user)
+            import site
+            import sys
+            user_site = site.getusersitepackages()
+            if user_site and user_site not in sys.path:
+                sys.path.insert(0, user_site)
+            
             try:
-                import fitz  # PyMuPDF
+                # Try importing pymupdf first (handles namespace conflicts with other 'fitz' packages)
+                # Store it globally so PyMuPDFExtractor can use it
+                global fitz
+                try:
+                    import pymupdf
+                    fitz = pymupdf  # pymupdf provides fitz interface
+                    # Verify it's actually PyMuPDF (has 'open' method)
+                    if not hasattr(fitz, 'open'):
+                        raise ImportError("pymupdf module found but doesn't have 'open' method")
+                except ImportError:
+                    # Fallback to direct fitz import
+                    import fitz  # PyMuPDF
+                    # Verify it's actually PyMuPDF (has 'open' method)
+                    if not hasattr(fitz, 'open'):
+                        raise ImportError("fitz module found but doesn't have 'open' method - may be wrong package")
                 return PyMuPDFExtractor()
-            except ImportError:
+            except ImportError as e:
                 raise ImportError(
-                    "PyMuPDF not installed. Install with: pip install pymupdf\n"
-                    "Or use pdfplumber: pip install pdfplumber"
+                    f"PyMuPDF not installed. Install with: pip install pymupdf\n"
+                    f"Or use pdfplumber: pip install pdfplumber\n"
+                    f"Error: {e}"
                 )
         elif self.extractor_name == 'pdfplumber':
             try:
@@ -242,6 +268,13 @@ class PDFSource(DataSource):
             **{k: metadata.get(k) for k in self.metadata_fields if k in metadata}
         }
         
+        # Apply folder-level metadata (overrides PDF metadata if conflict)
+        # This allows setting book_name, author, certificate_type, etc. for all PDFs in folder
+        if self.folder_metadata:
+            extra.update(self.folder_metadata)
+            # Also update metadata dict for schema mapping
+            metadata.update(self.folder_metadata)
+        
         if page_number is not None:
             extra["page_number"] = page_number
         if chunk_number is not None:
@@ -254,12 +287,19 @@ class PDFSource(DataSource):
         # Ensure raw_id is string
         raw_id_str = str(chunk_id) if not isinstance(chunk_id, str) else chunk_id
         
+        # Use folder metadata for license if not set by schema
+        license_value = None
+        if apply_schema and isinstance(self.schema, dict):
+            license_value = self.schema.get("default_license")
+        elif self.folder_metadata.get("license"):
+            license_value = self.folder_metadata["license"]
+        
         return RawDocument(
             raw_id=raw_id_str,
             text=text,
             source=self.spec.name,
             url=url,
-            license=self.schema.get("default_license") if apply_schema and isinstance(self.schema, dict) else None,
+            license=license_value,
             created_at=None,
             extra=extra
         )
@@ -301,6 +341,7 @@ class PDFExtractor:
 
 
 class PyMuPDFExtractor(PDFExtractor):
+    """PyMuPDF extractor - uses pymupdf package."""
     """PyMuPDF (fitz) extractor - fast and accurate."""
     
     def extract_full(self, pdf_path: Path) -> tuple[str, Dict[str, Any]]:

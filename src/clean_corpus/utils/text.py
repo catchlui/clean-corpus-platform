@@ -3,9 +3,30 @@
 from __future__ import annotations
 import re
 import math
+import unicodedata
 from collections import Counter
 
 _TAG_RE = re.compile(r"<[^>]+>")
+
+def normalize_unicode_nfc(text: str) -> str:
+    """Apply Unicode NFC (Canonical Composition) normalization.
+    
+    This ensures Indic scripts and other Unicode text have consistent encoding.
+    Fixes broken encodings by normalizing to canonical composed form.
+    
+    Args:
+        text: Input text that may have inconsistent Unicode encoding
+        
+    Returns:
+        Text normalized to NFC form
+    """
+    if not text:
+        return text
+    try:
+        return unicodedata.normalize('NFC', text)
+    except (UnicodeError, TypeError):
+        # If normalization fails, return original text
+        return text
 
 def sanitize(text: str) -> str:
     """Remove simple HTML tags and normalize whitespace."""

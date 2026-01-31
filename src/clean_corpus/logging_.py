@@ -3,7 +3,7 @@
 We use Python's standard `logging` module with a JSON-ish structured format.
 This keeps dependencies minimal and makes logs easy to ship to ELK/Loki.
 
-- Logs go to: `<out_dir>/logs/<run_id>.log`
+- Logs go to: `<log_dir>/<run_id>.log` (global log directory)
 - Also prints concise progress to stdout.
 """
 
@@ -11,10 +11,23 @@ from __future__ import annotations
 import logging
 import os
 from datetime import datetime
+from typing import Optional
 
-def setup_logging(out_dir: str, run_id: str) -> None:
-    os.makedirs(os.path.join(out_dir, "logs"), exist_ok=True)
-    log_path = os.path.join(out_dir, "logs", f"{run_id}.log")
+def setup_logging(out_dir: str, run_id: str, log_dir: Optional[str] = None) -> None:
+    """
+    Setup logging configuration.
+    
+    Args:
+        out_dir: Output directory (for backward compatibility)
+        run_id: Run identifier
+        log_dir: Global log directory (if None, uses out_dir/logs for backward compatibility)
+    """
+    if log_dir is None:
+        # Backward compatibility: use out_dir/logs
+        log_dir = os.path.join(out_dir, "logs")
+    
+    os.makedirs(log_dir, exist_ok=True)
+    log_path = os.path.join(log_dir, f"{run_id}.log")
 
     root = logging.getLogger()
     root.setLevel(logging.INFO)

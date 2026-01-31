@@ -1,0 +1,57 @@
+======================================================================
+CLEAN CORPUS PLATFORM - RUN SUMMARY REPORT
+======================================================================
+
+Run ID: class4_hindi_veena_2026_030808
+Policy Version: policy_v1
+Generated: 2026-01-31 08:38:08
+
+======================================================================
+SOURCE CONFIGURATION
+======================================================================
+
+Source: class4_hindi_veena
+  Type: pdf
+  Dataset/File: Input-output-exec/data/class4_hindi_veena/dhve101.pdf
+  License Field: license
+  URL Field: url
+
+======================================================================
+STATISTICS
+======================================================================
+
+Total Processed: 16 documents
+Total Written: 6 documents
+Total Rejected: 10 documents
+Success Rate: 37.5%
+
+======================================================================
+OUTPUT LOCATIONS
+======================================================================
+
+docs_dir: Input-output-exec/runs/class4_hindi_veena_2026_030808\docs
+rejections: Input-output-exec/runs/class4_hindi_veena_2026_030808\rejections\rejections.jsonl
+rejected_dir: None
+stats_dir: None
+analytics_events: Input-output-exec/runs/class4_hindi_veena_2026_030808\analytics\events
+analytics_aggregates: Input-output-exec/runs/class4_hindi_veena_2026_030808\analytics\aggregates
+metadata_dir: Input-output-exec/runs/class4_hindi_veena_2026_030808\metadata
+checkpoint: Input-output-exec/checkpoints\class4_hindi_veena_2026_030808.json
+log_dir: Input-output-exec/logs
+
+======================================================================
+RESUME/RERUN INSTRUCTIONS
+======================================================================
+
+To resume this run:
+  - Use same config file
+  - Pipeline will auto-resume from checkpoint
+  - Checkpoint: Input-output-exec/runs/class4_hindi_veena_2026_030808/checkpoints/class4_hindi_veena_2026_030808.json
+
+To rerun from scratch:
+  - Delete checkpoint: Input-output-exec/runs/class4_hindi_veena_2026_030808/checkpoints/class4_hindi_veena_2026_030808.json
+  - (Optional) Delete outputs
+  - Run pipeline again
+
+For detailed checkpoint report:
+  python scripts/checkpoint_report.py Input-output-exec/runs/class4_hindi_veena_2026_030808 class4_hindi_veena_2026_030808

@@ -11,11 +11,14 @@ from typing import Dict
 from .base import CorpusWriter, MetadataWriter
 from .parquet import ParquetCorpusWriter
 from .jsonl import JSONLCorpusWriter
+from .dolma_writer import DolmaCorpusWriter
 from .meta_parquet import ParquetMetadataWriterV1
 
 _CORPUS: Dict[str, CorpusWriter] = {
     "parquet": ParquetCorpusWriter(),
     "jsonl": JSONLCorpusWriter(),
+    "dolma": DolmaCorpusWriter(),
+    "doml": DolmaCorpusWriter(),  # DOML is an alias for DOLMA format
 }
 
 _META: Dict[str, MetadataWriter] = {

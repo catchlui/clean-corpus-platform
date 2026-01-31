@@ -33,6 +33,7 @@ class ParquetMetadataWriterV1(MetadataWriter):
                 ("policy_version", "string"),
                 ("transform_chain", "list<string>"),
                 ("created_at_ms", "int64"),
+                ("data_tag", "string"),  # Data use tag: training | sft | alignment (for filtering)
                 ("schema_version", "string"),
             ]
         }
@@ -58,6 +59,7 @@ class ParquetMetadataWriterV1(MetadataWriter):
             ("policy_version", pa.string()),
             ("transform_chain", pa.list_(pa.string())),
             ("created_at_ms", pa.int64()),
+            ("data_tag", pa.string()),
             ("schema_version", pa.string()),
         ])
 
@@ -105,6 +107,7 @@ class ParquetMetadataWriterV1(MetadataWriter):
                 "policy_version": str(d.policy_version) if d.policy_version else "policy_v0",
                 "transform_chain": [str(x) for x in (d.transform_chain or [])],
                 "created_at_ms": safe_int64(d.created_at_ms) if d.created_at_ms is not None else 0,
+                "data_tag": str(d.data_tag) if getattr(d, "data_tag", None) else "",
                 "schema_version": str(self.schema_version),
             })
         

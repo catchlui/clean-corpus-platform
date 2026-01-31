@@ -41,6 +41,8 @@ class SourceSpec:
     text_field: str = "text"
     license_field: str = "license"
     url_field: str = "url"
+    # Hugging Face dataset config name (optional, e.g. "v1_7" for allenai/dolma)
+    config: Optional[str] = None
     # PDF-specific options (optional, only used when kind="pdf")
     chunk_mode: str = "page"  # page | document | fixed_size
     extractor: str = "pymupdf"  # pymupdf | pdfplumber | pypdf2
@@ -62,6 +64,10 @@ class SourceSpec:
     language: Optional[str] = None  # ISO 639-1 language code (en, hi, ta, etc.)
     auto_detect_language: bool = True  # Automatically detect language from PDF content
     metadata: Optional[Dict[str, Any]] = None  # Additional metadata to add to documents
+    # Entry-level processing overrides (optional, for unified configuration)
+    processing: Optional[Dict[str, Any]] = None  # Processing configuration overrides for this source
+    # Data use tag for filtering (e.g. training | sft | alignment); overrides output.data_tag per source
+    data_tag: Optional[str] = None
 
 class DataSource:
     """Base interface for all sources."""

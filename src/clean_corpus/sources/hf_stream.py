@@ -35,11 +35,20 @@ class HFStreamingSource(DataSource):
         # Load dataset - will automatically use HuggingFace cache if available
         # If you downloaded via huggingface-cli download, it goes to the cache
         # and will be used automatically here
-        ds = load_dataset(
-            self.spec.dataset,
-            split=self.spec.split,
-            streaming=True
-        )
+        config = getattr(self.spec, "config", None)
+        if config:
+            ds = load_dataset(
+                self.spec.dataset,
+                config,
+                split=self.spec.split,
+                streaming=True,
+            )
+        else:
+            ds = load_dataset(
+                self.spec.dataset,
+                split=self.spec.split,
+                streaming=True,
+            )
         
         for ex in ds:
             yield RawDocument(

@@ -40,6 +40,8 @@ def main() -> None:
     pm.add_argument("output_dir", nargs="?", default="storage_example", help="Output directory to monitor")
     pm.add_argument("--refresh", "-r", type=float, default=5.0, metavar="SECONDS", help="Refresh interval in seconds (default: 5.0)")
     pm.add_argument("--unified", action="store_true", help="Use unified Monitor+Analytics app (default: legacy dashboard)")
+    pm.add_argument("--debug", action="store_true", help="Enable debug output")
+    pm.add_argument("--simple", action="store_true", help="Use simple text mode (no Rich formatting)")
 
     args = p.parse_args()
 
@@ -53,13 +55,14 @@ def main() -> None:
             create_unified_app(args.output_dir, args.refresh)
         else:
             from .monitor.dashboard import create_dashboard
-            create_dashboard(args.output_dir, args.refresh)
+            create_dashboard(args.output_dir, args.refresh, use_simple_mode=args.simple, debug=args.debug)
         return
 
     cfg = _load_yaml(args.config)
-    run = cfg.get("run", {})
-    out_dir = run.get("out_dir", "storage")
-    setup_logging(out_dir=out_dir, run_id=run.get("run_id", "run"))
+    from .run_id import resolve_run_id, resolve_out_dir
+    run_id = resolve_run_id(cfg)
+    out_dir = resolve_out_dir(cfg, run_id)
+    setup_logging(out_dir=out_dir, run_id=run_id)
     
     # Store config path in environment for manifest
     os.environ['CLEAN_CORPUS_CONFIG_PATH'] = os.path.abspath(args.config)

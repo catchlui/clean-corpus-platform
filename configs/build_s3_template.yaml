@@ -1,0 +1,97 @@
+# Template: S3 as destination (output + global fingerprints outside VM)
+# Use this when running in the cloud: output and fingerprints live on S3; VM can be stateless.
+#
+# Prerequisites: boto3, AWS credentials (env or config).
+# - Output: only corpus_format s3_parquet writes to S3; manifest/rejections/reports go to local out_dir.
+# - Streaming + Ray: see docs/STREAMING_DOLMA_RAY.md.
+# - Full S3 story: docs/STORAGE_LOCAL_AND_S3.md, docs/CLOUD_NATIVE_FINGERPRINTS.md.
+
+run:
+  run_id_auto:
+    enabled: true
+    prefix_digits: 4
+    suffix_digits: 6
+    include_input_name: true
+    input_name_from: "source"
+    separator: "_"
+  # out_dir is a key prefix under the bucket (no s3://); {run_id} is resolved
+  out_dir: "runs/{run_id}"
+  # Output storage: S3 (outside VM). Omit for local.
+  storage:
+    type: s3
+    bucket: my-corpus-bucket          # set to your bucket
+    prefix: "clean-corpus"            # optional; keys become prefix/out_dir/...
+    region: us-east-1                 # optional
+    # aws_access_key_id: ...          # optional; use env AWS_ACCESS_KEY_ID
+    # aws_secret_access_key: ...      # optional; use env AWS_SECRET_ACCESS_KEY
+  shard_docs: 5000
+  log_every_docs: 1000
+  checkpoint_every_docs: 5000
+  policy_version: "policy_v1"
+
+execution:
+  mode: "local"     # or ray_data for scale; see docs/STREAMING_DOLMA_RAY.md
+
+global:
+  checkpoint_dir: "checkpoints"       # keep local or use shared FS in cloud
+  log_dir: "logs"
+  processing:
+    global_fingerprints:
+      enabled: true
+      root_path: "fingerprints"       # path under storage prefix
+      # Fingerprints outside VM: same S3 bucket or dedicated. Omit for local.
+      storage:
+        type: s3
+        bucket: my-corpus-bucket      # can be same as run.storage or different
+        prefix: "fingerprints_global"
+        region: us-east-1
+      document_type_priority: ["books", "wiki", "commoncrawl"]
+      source_to_document_type:
+        class4_hindi_veena: "books"
+        dolma_hf: "commoncrawl"
+      simhash:
+        enabled: true
+        max_hamming: 3
+      minhash:
+        enabled: true
+        threshold: 0.9
+        ngram: 5
+        num_perm: 128
+      chunk_hash:
+        enabled: true
+        chunk_size: 512
+        chunk_overlap: 0
+
+# Sources: local paths or (future) S3 prefixes per source
+sources:
+  - name: "class4_hindi_veena"
+    type: "batch"
+    kind: "pdf"
+    dataset: "Input-output-exec/data/class4_hindi_veena/dhve101.pdf"
+    metadata:
+      source: "NCERT"
+      license: "CC-BY-NC"
+      category: "textbook"
+
+policies:
+  licenses: "src/clean_corpus/policies/defaults/licenses.yaml"
+  quality: "src/clean_corpus/policies/defaults/quality.yaml"
+  pii: "src/clean_corpus/policies/defaults/pii.yaml"
+  curriculum: "src/clean_corpus/policies/defaults/curriculum.yaml"
+
+stages:
+  - license_gate
+  - sanitize
+  - unicode_normalize
+  - pii_policy_gate
+  - exact_dedup
+  - global_dedup
+  - quality_gate
+  - curriculum_eligibility
+
+output:
+  data_tag: "training"
+  layout: "flat"
+  # Use s3_parquet to write Parquet shards to S3. For Dolma/JSONL to S3, pipeline needs output backend (see docs).
+  corpus_format: "s3_parquet"
+  metadata_format: "parquet_v1"

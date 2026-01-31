@@ -128,6 +128,24 @@ python scripts/show_run_info.py storage_example
 
 ## Configuration
 
+### Quick Configuration
+
+**Start with the standard template:**
+```bash
+cp configs/standard_template.yaml my_config.yaml
+# Edit my_config.yaml with your data sources
+python scripts/run_pipeline.py my_config.yaml
+```
+
+See `configs/standard_template.yaml` for a complete template covering all data source types:
+- Local JSONL files (single file, multiple files, directories, glob patterns)
+- PDF files and folders
+- Web PDFs (download from URLs)
+- HuggingFace streaming datasets
+- S3 storage
+
+See `docs/CONFIGURATION_GUIDE.md` for detailed configuration documentation.
+
 ### Basic Configuration
 
 ```yaml
@@ -861,7 +879,7 @@ sources:
 - Resume support (skip already downloaded files)
 - Metadata extraction (title, author, language, source URL)
 
-See `docs/WEB_PDF_DOWNLOADER.md` for complete guide.
+See `examples/build_web_pdf_ncert.yaml` for complete configuration examples.
 
 ## Contributing
 

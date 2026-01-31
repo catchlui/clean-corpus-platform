@@ -219,11 +219,15 @@ def run_pipeline(config_path: str, ray_config: Optional[str] = None) -> bool:
         from clean_corpus.pipeline.build import build_local, build_ray
         from clean_corpus.pipeline.ray_data_build import build_ray_data
         from clean_corpus.logging_ import setup_logging
+        from clean_corpus.run_id import resolve_run_id, resolve_out_dir
         
-        run_cfg = cfg.get('run', {})
-        out_dir = run_cfg.get('out_dir', 'storage')
-        run_id = run_cfg.get('run_id', 'run')
-        setup_logging(out_dir=out_dir, run_id=run_id)
+        run_id = resolve_run_id(cfg)
+        out_dir = resolve_out_dir(cfg, run_id)
+        
+        # Get global log directory from config
+        global_cfg = cfg.get('global', {})
+        log_dir = global_cfg.get('log_dir', None)
+        setup_logging(out_dir=out_dir, run_id=run_id, log_dir=log_dir)
         
         # Store config path for manifest
         import os

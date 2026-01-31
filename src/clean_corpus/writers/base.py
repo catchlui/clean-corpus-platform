@@ -17,8 +17,17 @@ class CorpusWriter(ABC):
     name: str
 
     @abstractmethod
-    def write_shard(self, docs: Iterable[Document], *, out_dir: str, source: str, shard_idx: int) -> str:
-        """Write a shard and return the output path."""
+    def write_shard(
+        self,
+        docs: Iterable[Document],
+        *,
+        out_dir: str,
+        source: str,
+        shard_idx: int,
+        document_subpath: Optional[str] = None,
+    ) -> str:
+        """Write a shard and return the output path.
+        If document_subpath is set (structured layout), write to out_dir/documents/{document_subpath}/shard_*.jsonl."""
         raise NotImplementedError
 
 class MetadataWriter(ABC):

@@ -1,0 +1,58 @@
+# Test: Dolma 1.7 output + one NCERT book from data/
+# Usage: python scripts/run_pipeline.py examples/build_dolma_ncert_test.yaml
+
+run:
+  run_id: "Dolma_NCERT_Test_2026-01-30"
+  out_dir: "storage_dolma_ncert_test"
+  shard_docs: 500
+  log_every_docs: 50
+  checkpoint_every_docs: 200
+  policy_version: "policy_v1"
+
+execution:
+  mode: local
+
+pdf:
+  chunk_mode: "page"
+  extractor: "pymupdf"
+  min_text_length: 200
+  metadata_fields: ["title", "author", "page_number", "language"]
+  schema:
+    default_license: "CC-BY-NC"
+    metadata_mapping:
+      document_title: "title"
+      document_author: "author"
+      document_language: "language"
+
+sources:
+  - name: "class4_hindi_veena"
+    type: "batch"
+    kind: "pdf"
+    dataset: "data/class4_hindi_veena/dhve101.pdf"
+    metadata:
+      source: "NCERT"
+      license: "CC-BY-NC"
+      category: "textbook"
+      subject: "Hindi"
+      publisher: "National Council of Educational Research and Training"
+
+policies:
+  licenses: "src/clean_corpus/policies/defaults/licenses.yaml"
+  quality: "src/clean_corpus/policies/defaults/quality.yaml"
+  pii: "src/clean_corpus/policies/defaults/pii.yaml"
+  curriculum: "src/clean_corpus/policies/defaults/curriculum.yaml"
+
+stages:
+  - license_gate
+  - sanitize
+  - pii_policy_gate
+  - exact_dedup
+  - quality_gate
+  - curriculum_eligibility
+
+output:
+  layout: "flat"
+  corpus_format: "dolma"
+  format_options:
+    dolma:
+      include_all_metadata: true
