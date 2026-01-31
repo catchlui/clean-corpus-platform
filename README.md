@@ -1,892 +1,167 @@
 # Clean Corpus Platform
 
-A **production-grade, scalable data preprocessing and governance platform** for large-scale language model training.
+A **production-grade, scalable data preprocessing and governance platform** for large-scale language model training. Designed for high-volume ingestion, persistent deduplication, and verifiable data quality.
 
-## Features
+## Key Features
 
-- ✅ **Policy-driven processing** - YAML-based policies for licenses, quality, PII, curriculum
-- ✅ **Modular pipeline stages** - License gate, sanitization, deduplication, quality filtering, PII detection
-- ✅ **Checkpoint/resume** - Resume long-running jobs from checkpoints
-- ✅ **Per-stage analytics** - Detailed analytics for each pipeline stage
-- ✅ **Multiple execution modes** - Local, Ray, Ray Data
-- ✅ **Extensible** - Add sources, stages, detectors, writers without code changes
-- ✅ **Storage flexibility** - Local filesystem or S3 storage
-- ✅ **Real-time monitoring** - Terminal dashboard for live monitoring
-- ✅ **Multi-file processing** - Process multiple files together with per-file statistics
-- ✅ **PDF processing** - Configurable chunking strategies and schema transformations
-- ✅ **Web PDF downloader** - Download PDFs from websites (like NCERT) with automatic language detection
-- ✅ **Multi-language support** - Automatic language detection and metadata for different languages
-- ✅ **Per-file tracking** - Track statistics and analytics per source file
+- ✅ **Global Fingerprint Layer** - Persistent SimHash, MinHash LSH, and Chunk Hash stores for cross-dataset deduplication.
+- ✅ **S3-Native Support** - Input, output, and global fingerprints can live on S3; perfect for stateless cloud workers.
+- ✅ **Priority-Aware Dedup** - Resolve duplicates by document family (Books > Wiki > Web) or specific source priority.
+- ✅ **Policy-Driven Processing** - YAML-based gates for licenses, PII detection, and quality (length, entropy).
+- ✅ **Ray & Ray Data Integration** - Scalable processing from local dev to large-scale distributed clusters.
+- ✅ **Unified Data Layout** - Standardized `Input-output-exec/` structure for data, runs, logs, and fingerprints.
+- ✅ **Rich Monitoring** - Real-time terminal dashboard with per-stage analytics and per-file statistics.
+- ✅ **Data Tagging** - Tag data as `training`, `sft`, or `alignment` for downstream filtering.
+
+---
 
 ## Installation
 
 ### Prerequisites
-
-- Python 3.8+
-- pip or uv
+- Python 3.9+
+- AWS credentials (if using S3)
 
 ### Install Package
-
 ```bash
-# Using pip
+# Core installation
 pip install -e .
 
-# Using uv (recommended)
-uv pip install -e .
-
-# With optional dependencies
-pip install -e ".[s3]"      # S3 storage support
-pip install -e ".[ray]"     # Ray execution support
-pip install -e ".[pdf]"     # PDF processing support
-pip install -e ".[web_pdf]" # Web PDF downloader (requests, beautifulsoup4, langdetect)
-pip install -e ".[web_pdf_playwright]" # Playwright for JavaScript-heavy sites (better than Selenium)
-pip install -e ".[all]"     # All optional dependencies
+# With optional cloud/scaling features
+pip install -e ".[s3,ray,pdf,web_pdf]"
 ```
 
-### Windows Installation Issues
-
-If you see "The system cannot find the file specified: [executable].exe":
-
-```powershell
-# Close Python processes
-taskkill /F /IM python.exe /T
-
-# Install with ignore flag
-pip install -e . --ignore-installed datasets numpy
-
-# Or use virtual environment
-python -m venv .venv
-.venv\Scripts\activate
-pip install -e .
-```
-
-### CLI Access
-
-If `clean-corpus` command is not found, use Python module:
-
+### Bootstrap
+Required to register PII detectors and default policies:
 ```bash
-# Instead of: clean-corpus build --config ...
-python -m clean_corpus.cli build --config examples/build_local_jsonl.yaml
-
-# Instead of: clean-corpus monitor ...
-python -m clean_corpus.cli monitor storage_example
+python scripts/bootstrap_pii.py
 ```
+
+---
 
 ## Quick Start
 
-### 1. Bootstrap PII Detectors
-
+### 1. Configure your run
+Copy the template and add your sources:
 ```bash
-python scripts/bootstrap_pii.py
+cp configs/standard_template.yaml my_run.yaml
 ```
 
-### 2. Run Pipeline
-
-**Using all-in-one script (recommended):**
-
+### 2. Run the pipeline
 ```bash
-# Basic usage
-python scripts/run_pipeline.py examples/build_local_jsonl.yaml
+# Local execution
+python scripts/run_pipeline.py configs/build.yaml
 
-# With real-time monitoring
-python scripts/run_pipeline.py examples/build_local_jsonl.yaml --monitor
+# Distributed execution (requires Ray)
+# Set execution.mode: ray_data in your YAML
+python scripts/run_pipeline.py configs/build.yaml
 ```
 
-**Using CLI directly:**
-
+### 3. Monitor live
+In a separate terminal:
 ```bash
-python -m clean_corpus.cli build --config examples/build_local_jsonl.yaml
+python -m clean_corpus.cli monitor Input-output-exec/runs/YOUR_RUN_ID --unified
 ```
 
-### 3. Monitor Progress
+---
 
-**Unified Monitor + Analytics (recommended):**
-```bash
-# In another terminal - unified app with two screens
-python -m clean_corpus.cli monitor storage_example --unified
-# Press 'm' for Monitor screen, 'a' for Analytics screen, 'q' to quit
-```
+## How It Works
 
-**Legacy Dashboard:**
-```bash
-# In another terminal
-python -m clean_corpus.cli monitor storage_example
-```
+### 1. Ingestion (Sources)
+The platform streams data from diverse sources without full downloads:
+- **HuggingFace**: Streams directly from the Hub via `load_dataset(..., streaming=True)`.
+- **PDFs**: Local or S3; supports page-level, document-level, or fixed-size chunking.
+- **JSONL**: Local files, directories, or glob patterns.
+- **Web PDF**: Scrapes and downloads PDFs from URLs (e.g., NCERT) with auto-language detection.
 
-### 4. View Results
+### 2. Canonical Pipeline Order
+Stages follow a hard-coded governance order to ensure safety and quality:
+1. **Ingest Gate** (License checks)
+2. **Normalization** (Unicode NFC, sanitization)
+3. **PII Gate** (HARD GATE: must run before deduplication to prevent sensitive data leakage)
+4. **Deduplication** (Exact SHA256 + Global Fingerprint stores)
+5. **Quality Gate** (Length, character entropy, language filters)
+6. **Metadata Enrichment** (Domain tagging, data use tagging)
+7. **Freeze & Handoff** (Writing final shards)
 
-```bash
-# View analytics
-python scripts/view_analytics.py storage_example
+### 3. Global Fingerprint Layer
+Unlike traditional local-map dedup, this layer is **persistent and cross-dataset**:
+- **SimHash**: Fast coarse filtering (rehosted pages, mirrors).
+- **MinHash LSH**: Semantic near-duplicate detection.
+- **Chunk Hash**: LLM-critical sub-document deduplication (prevents memorization).
 
-# View checkpoint report
-python scripts/checkpoint_report.py storage_example
+### 4. Storage Architecture (`Input-output-exec/`)
+All artifacts are consolidated under one root for easy management:
+- `data/`: Raw input datasets.
+- `runs/`: Output shards, rejections, and summary reports.
+- `checkpoints/`: Resume state files.
+- `logs/`: System and run logs.
+- `fingerprints_global/`: The authoritative global fingerprint stores.
 
-# View run info
-python scripts/show_run_info.py storage_example
-```
+---
 
-## Configuration
+## Configuration Reference
 
-### Quick Configuration
-
-**Start with the standard template:**
-```bash
-cp configs/standard_template.yaml my_config.yaml
-# Edit my_config.yaml with your data sources
-python scripts/run_pipeline.py my_config.yaml
-```
-
-See `configs/standard_template.yaml` for a complete template covering all data source types:
-- Local JSONL files (single file, multiple files, directories, glob patterns)
-- PDF files and folders
-- Web PDFs (download from URLs)
-- HuggingFace streaming datasets
-- S3 storage
-
-See `docs/CONFIGURATION_GUIDE.md` for detailed configuration documentation.
-
-### Basic Configuration
-
+### `run`: Execution Identity
 ```yaml
 run:
-  run_id: "Example_2026-01-28"
-  out_dir: "storage_example"
-  shard_docs: 5000
-  checkpoint_every_docs: 5000
-  policy_version: "policy_v1"
-
-execution:
-  mode: local  # local | ray | ray_data
-
-sources:
-  - name: "internal_jsonl"
-    type: "batch"
-    kind: "local_jsonl"
-    dataset: "examples/sample_internal.jsonl"
-    text_field: "text"
-    license_field: "license"
-    url_field: "url"
-
-policies:
-  licenses: "src/clean_corpus/policies/defaults/licenses.yaml"
-  quality: "src/clean_corpus/policies/defaults/quality.yaml"
-  pii: "src/clean_corpus/policies/defaults/pii.yaml"
-  curriculum: "src/clean_corpus/policies/defaults/curriculum.yaml"
-
-stages:
-  - license_gate
-  - sanitize
-  - exact_dedup
-  - quality_gate
-  - pii_policy_gate
-  - semantic_simhash
-  - curriculum_eligibility
-
-output:
-  corpus_format: parquet
-  metadata_format: parquet_v1
+  # Auto-generate unique ID: {source}_{year}_{time}
+  run_id_auto:
+    enabled: true
+    prefix_digits: 4
+    suffix_digits: 6
+  out_dir: "Input-output-exec/runs/{run_id}"
 ```
 
-### Multi-File Processing
-
-Process multiple files together in a single source:
-
+### `global_fingerprints`: Global Dedup
 ```yaml
-sources:
-  # Option 1: List of files
-  - name: "all_samples"
-    type: "batch"
-    kind: "local_jsonl"
-    dataset:
-      - "examples/sample_internal.jsonl"
-      - "examples/sample_additional.jsonl"
-      - "examples/sample_tech.jsonl"
-    text_field: "text"
-    license_field: "license"
-    url_field: "url"
+global_fingerprints:
+  enabled: true
+  root_path: "Input-output-exec/fingerprints_global"
+  # Optional: Move store outside the VM to S3
+  storage: { type: s3, bucket: my-bucket, prefix: "dedup" }
   
-  # Option 2: Directory (processes all .jsonl files)
-  - name: "directory_source"
-    type: "batch"
-    kind: "local_jsonl"
-    dataset: "examples/"  # Processes all .jsonl files recursively
-    text_field: "text"
-    license_field: "license"
-    url_field: "url"
-  
-  # Option 3: Glob pattern
-  - name: "pattern_source"
-    type: "batch"
-    kind: "local_jsonl"
-    dataset: "examples/sample_*.jsonl"  # Matches all matching files
-    text_field: "text"
-    license_field: "license"
-    url_field: "url"
-```
-
-**Benefits:**
-- All files processed together as one source
-- Per-file statistics tracked automatically
-- Dashboard shows breakdown by file
-- Each document includes `source_file` field in output
-
-### PDF Processing
-
-Process PDF files with configurable chunking and schema transformations:
-
-```yaml
-# Global PDF configuration (applies to all PDF sources)
-pdf:
-  chunk_mode: "page"  # page | document | fixed_size
-  extractor: "pymupdf"  # pymupdf | pdfplumber | pypdf2
-  min_text_length: 200
-  metadata_fields: ["title", "author", "page_number"]
-  
-  # Fixed-size chunking (when chunk_mode="fixed_size")
-  chunk_size: 1000  # Characters per chunk
-  chunk_overlap: 200  # Overlap between chunks
-  
-  # Global schema configuration
-  schema:
-    default_license: "CC-BY"
-    text_prefix: ""
-    text_suffix: ""
-    metadata_mapping:
-      document_title: "title"
-      document_author: "author"
-
-sources:
-  # Use global PDF config
-  - name: "research_papers"
-    type: "batch"
-    kind: "pdf"
-    dataset: "data/papers/"  # Directory of PDFs
-  
-  # Override chunking strategy
-  - name: "reports"
-    type: "batch"
-    kind: "pdf"
-    dataset: "data/reports/"
-    chunk_mode: "document"  # Override: entire PDF as one document
-    min_text_length: 500
-  
-  # Fixed-size chunking
-  - name: "long_documents"
-    type: "batch"
-    kind: "pdf"
-    dataset: "data/long_docs/"
-    chunk_mode: "fixed_size"
-    chunk_size: 2000
-    chunk_overlap: 400
-  
-  # Directory-specific schema override
-  - name: "academic_papers"
-    type: "batch"
-    kind: "pdf"
-    dataset: "data/academic/"
-    schema:
-      directory_pattern: ".*academic.*"
-      default_license: "CC-BY-SA"
-      text_prefix: "[ACADEMIC PAPER]\n"
-      metadata_mapping:
-        paper_title: "title"
-        paper_authors: "author"
-```
-
-**Chunking Modes:**
-- `page` - Each page becomes a separate document (default)
-- `document` - Entire PDF becomes one document
-- `fixed_size` - Split into fixed-size chunks with overlap
-
-**Schema Features:**
-- Global schema applies to all PDFs
-- Directory-specific schemas override global settings
-- Supports text prefixes/suffixes
-- Metadata field mapping
-- Default license assignment
-
-### Storage Configuration
-
-**Local Storage (Default):**
-```yaml
-# Omit storage section or use:
-storage:
-  type: local
-```
-
-**S3 Storage:**
-```yaml
-storage:
-  type: s3
-  bucket: my-bucket
-  prefix: clean-corpus/runs
-  region: us-east-1
-
-run:
-  out_dir: "s3://my-bucket/clean-corpus/runs"
-```
-
-**Per-Output Storage:**
-```yaml
-storage:
-  type: local  # Default
-
-output_storage:
-  docs:
-    type: s3
-    bucket: corpus-bucket
-  metadata:
-    type: s3
-    bucket: metadata-bucket
-  analytics:
-    type: local  # Keep local for faster access
-```
-
-## Pipeline Stages
-
-| Stage | Purpose | Layer |
-|-------|---------|------|
-| `license_gate` | Filter by license policy | governance |
-| `sanitize` | Text normalization | preprocessing |
-| `exact_dedup` | Exact duplicate detection (SHA256) | preprocessing |
-| `near_dup_minhash` | Near-duplicate detection (MinHash LSH) | dedup |
-| `semantic_simhash` | Semantic similarity hashing | dedup |
-| `quality_gate` | Length + entropy filtering | quality |
-| `pii_policy_gate` | PII detection + policy enforcement | governance |
-| `tokenize` | Tokenization (via adapter) | preprocessing |
-| `curriculum_eligibility` | Token window eligibility tagging | curriculum |
-
-## Execution Modes
-
-### Local Mode
-
-```yaml
-execution:
-  mode: local
-```
-
-- Single-threaded processing
-- Best for development and small datasets
-- Full checkpoint/resume support
-
-### Ray Mode
-
-```yaml
-execution:
-  mode: ray
-```
-
-- Distributed processing with Ray
-- Requires Ray cluster
-
-### Ray Data Mode
-
-```yaml
-execution:
-  mode: ray_data
-```
-
-- Ray Data pipeline for large-scale processing
-- Best for production workloads
-- Requires Ray cluster
-
-## Monitoring Dashboard
-
-### Launch Dashboard
-
-```bash
-# Monitor default directory
-python -m clean_corpus.cli monitor
-
-# Monitor specific directory
-python -m clean_corpus.cli monitor storage_example
-
-# Custom refresh rate
-python -m clean_corpus.cli monitor storage_example --refresh 2.0
-```
-
-### Dashboard Features
-
-- ✅ Live processing statistics (written/rejected counts)
-- 📊 Stage-by-stage breakdown
-- 📈 Rejection rates
-- 📂 Source information with per-file statistics
-- 📝 Recent log activity
-- ⏱️ Elapsed time and completion estimates
-- 📁 Per-file breakdown showing processed/written/rejected per file
-
-**Important:** Dashboard is **read-only** and safe to start/stop anytime without affecting pipeline.
-
-## Extensibility
-
-### Adding New Sources
-
-**Step 1:** Implement source class
-
-```python
-# src/clean_corpus/sources/my_source.py
-from .base import DataSource, RawDocument, SourceSpec
-from typing import Iterable
-
-class MyCustomSource(DataSource):
-    def __init__(self, spec: SourceSpec):
-        self.spec = spec
-        self.name = spec.name
+  # Family-level priority (Books beat CommonCrawl)
+  document_type_priority: ["books", "wiki", "commoncrawl"]
+  source_to_document_type:
+    class4_hindi_veena: "books"
+    dolma_hf: "commoncrawl"
     
-    def stream(self) -> Iterable[RawDocument]:
-        for item in your_data_iterator():
-            yield RawDocument(
-                raw_id=generate_id(item),
-                text=item['text'],
-                source=self.spec.name,
-                url=item.get('url'),
-                license=item.get('license')
-            )
+  simhash: { enabled: true, max_hamming: 3 }
+  minhash: { enabled: true, threshold: 0.9 }
+  chunk_hash: { enabled: true, chunk_size: 512 }
 ```
 
-**Step 2:** Register in registry
-
-```python
-# src/clean_corpus/sources/registry.py
-from .my_source import MyCustomSource
-
-def make_source(spec: SourceSpec):
-    if spec.kind == "my_custom":
-        return MyCustomSource(spec)
-    # ... existing sources
-```
-
-**Step 3:** Use in config
-
-```yaml
-sources:
-  - name: "my_data"
-    kind: "my_custom"
-    # ... your config
-```
-
-### Adding New Metadata Fields
-
-**Step 1:** Create new metadata writer
-
-```python
-# src/clean_corpus/writers/meta_parquet_v2.py
-class ParquetMetadataWriterV2(MetadataWriter):
-    schema_version = "meta_v2"  # NEW version
-    
-    def _schema_arrow(self) -> pa.Schema:
-        return pa.schema([
-            # All fields from V1
-            ("doc_id", pa.binary(32)),
-            # ... existing fields ...
-            
-            # NEW fields
-            ("domain", pa.string()),      # NEW
-            ("word_count", pa.int32()),   # NEW
-        ])
-```
-
-**Step 2:** Register writer
-
-```python
-# src/clean_corpus/writers/registry.py
-register_metadata_writer("parquet_v2", ParquetMetadataWriterV2())
-```
-
-**Step 3:** Use in config
-
+### `output`: Format and Tagging
 ```yaml
 output:
-  metadata_format: parquet_v2
+  corpus_format: "dolma"  # dolma | parquet | jsonl
+  data_tag: "training"    # training | sft | alignment (filterable metadata)
+  layout: "structured"   # /processed/v1/documents/{lang}/{domain}/...
 ```
 
-**Note:** Old runs continue using old schema - no conflicts!
+---
 
-### Adding PII Detectors
-
-**Step 1:** Implement detector
-
-```python
-# src/clean_corpus/pii/detectors/custom.py
-class CustomDetector(PIIDetector):
-    name = "custom"
-    
-    def detect(self, text: str) -> List[PIISignal]:
-        # Your detection logic
-        return signals
-```
-
-**Step 2:** Register detector
-
-```python
-from clean_corpus.pii.registry import register_detector
-register_detector(CustomDetector())
-```
-
-**Step 3:** Update policy
+## Distributed Execution (Ray)
+For 100M+ documents, switch to `ray_data` mode. The driver handles streaming ingestion and chunks data into Ray blocks, which are processed in parallel across your cluster.
 
 ```yaml
-# policies/defaults/pii.yaml
-drop_kinds: ["custom"]  # Or redact_kinds
+execution:
+  mode: "ray_data"
+  ray_config: "configs/ray.yaml"
 ```
 
-## Storage
+---
 
-### Local Storage
+## Documentation
 
-Default storage - no configuration needed:
+- 📄 **[Global Fingerprint Layer](docs/GLOBAL_FINGERPRINT_LAYER.md)** - Hashing and priority logic.
+- 📄 **[S3 & Storage](docs/STORAGE_LOCAL_AND_S3.md)** - Running in the cloud.
+- 📄 **[Pipeline Order](docs/PIPELINE_ORDER.md)** - Rationale for stage ordering.
+- 📄 **[Streaming & Ray](docs/STREAMING_DOLMA_RAY.md)** - How data moves through the cluster.
+- 📄 **[Output Structure](docs/OUTPUT_STRUCTURE.md)** - Organizing processed data.
+- 📄 **[Cloud-Native Design](docs/CLOUD_NATIVE_FINGERPRINTS.md)** - Scaling with DynamoDB.
 
-```yaml
-# Omit storage section
-run:
-  out_dir: "storage"
-```
-
-### S3 Storage
-
-**Install S3 support:**
-```bash
-pip install boto3
-# or
-pip install -e ".[s3]"
-```
-
-**Configure:**
-```yaml
-storage:
-  type: s3
-  bucket: my-bucket
-  prefix: clean-corpus/runs
-  region: us-east-1
-```
-
-**AWS Credentials:**
-- Use AWS credentials file: `~/.aws/credentials`
-- Or environment variables: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
-- Or IAM roles (recommended for production)
-
-**S3-Compatible Services:**
-```yaml
-storage:
-  type: s3
-  bucket: my-bucket
-  endpoint_url: https://s3-compatible.example.com
-  region: us-east-1
-```
-
-## Checkpoint Reports
-
-### Automatic Reports
-
-After each run, a summary report is automatically generated:
-
-```
-{out_dir}/reports/{run_id}_summary.txt
-```
-
-### Detailed Reports
-
-```bash
-python scripts/checkpoint_report.py storage_example [run_id] [--config config.yaml]
-```
-
-Reports include:
-- Source metadata (file names, sizes, configuration)
-- Processed document counts
-- **Per-file statistics** (processed/written/rejected per file)
-- Shard information
-- Resume/rerun instructions
-
-## Troubleshooting
-
-### No Documents Extracted
-
-**Common causes:**
-1. Quality gate too strict - documents too short
-2. License gate - invalid licenses
-3. PII policy - documents dropped
-4. Multi-file source - check if files exist and are readable
-
-**Check rejections:**
-```bash
-python scripts/view_analytics.py storage_example
-cat storage_example/rejections/rejections.jsonl
-```
-
-**Check per-file statistics:**
-```bash
-# View checkpoint which includes per-file stats
-python scripts/checkpoint_report.py storage_example
-
-# Or check logs for per-file breakdown
-# Logs show: "Source X per-file statistics:"
-```
-
-### Dashboard Not Showing
-
-**Check:**
-1. Pipeline has run successfully
-2. Output directory exists: `storage_example/manifests/`
-3. Manifest file exists
-
-**Run pipeline first:**
-```bash
-python scripts/bootstrap_pii.py
-python -m clean_corpus.cli build --config examples/build_local_jsonl.yaml
-```
-
-### Installation Errors
-
-**Windows file locking:**
-```powershell
-taskkill /F /IM python.exe /T
-pip install -e . --ignore-installed datasets numpy
-```
-
-**CLI not found:**
-```bash
-# Use Python module instead
-python -m clean_corpus.cli build --config examples/build_local_jsonl.yaml
-```
-
-## Scripts
-
-### Core Scripts
-
-- `scripts/bootstrap_pii.py` - Register PII detectors (required)
-- `scripts/run_pipeline.py` - All-in-one pipeline runner
-- `scripts/run_pipeline.sh` - Shell wrapper
-- `scripts/run_pipeline.bat` - Windows wrapper
-
-### Utility Scripts
-
-- `scripts/checkpoint_report.py` - Detailed checkpoint reports (includes per-file stats)
-- `scripts/show_sources.py` - Inspect configured sources
-- `scripts/show_run_info.py` - Display run summary
-- `scripts/view_analytics.py` - View analytics data
-- `scripts/verify_hf_dataset.py` - Verify HuggingFace datasets
-- `scripts/diagnose_source.py` - Diagnose source configuration issues
-
-## Examples
-
-### Local JSONL Processing (Single File)
-
-```bash
-python scripts/run_pipeline.py examples/build_local_jsonl.yaml
-```
-
-### Multi-File Processing
-
-Process multiple JSONL files together:
-
-```yaml
-sources:
-  - name: "all_samples"
-    type: "batch"
-    kind: "local_jsonl"
-    dataset:
-      - "examples/sample_internal.jsonl"
-      - "examples/sample_additional.jsonl"
-      - "examples/sample_tech.jsonl"
-    text_field: "text"
-    license_field: "license"
-    url_field: "url"
-```
-
-```bash
-python scripts/run_pipeline.py examples/build_local_jsonl.yaml
-```
-
-**Output:**
-- Per-file statistics in logs
-- Dashboard shows per-file breakdown
-- Each document tagged with source file
-
-### PDF Processing
-
-```yaml
-pdf:
-  chunk_mode: "page"
-  extractor: "pymupdf"
-  min_text_length: 200
-
-sources:
-  - name: "research_papers"
-    type: "batch"
-    kind: "pdf"
-    dataset: "data/papers/"
-```
-
-```bash
-python scripts/run_pipeline.py examples/build_pdf.yaml
-```
-
-### HuggingFace Dataset
-
-```yaml
-sources:
-  - name: "common_pile"
-    kind: "hf_stream"
-    dataset: "common-pile/comma_v0.1_training_dataset"
-    split: "train"
-    text_field: "text"
-```
-
-```bash
-python scripts/run_pipeline.py examples/build_common_pile.yaml
-```
-
-### Multiple Sources
-
-```yaml
-sources:
-  - name: "source1"
-    kind: "local_jsonl"
-    dataset: "data1.jsonl"
-  - name: "source2"
-    kind: "hf_stream"
-    dataset: "dataset/name"
-```
-
-Each source processes independently with its own checkpoint.
-
-### Multi-File Source Example
-
-Process multiple files together with per-file tracking:
-
-```yaml
-sources:
-  - name: "all_samples"
-    type: "batch"
-    kind: "local_jsonl"
-    dataset:
-      - "examples/sample_internal.jsonl"
-      - "examples/sample_additional.jsonl"
-      - "examples/sample_tech.jsonl"
-    text_field: "text"
-    license_field: "license"
-    url_field: "url"
-```
-
-**Output includes:**
-- Per-file statistics in logs and dashboard
-- `source_file` field in each document
-- Per-file processed/written/rejected counts
-
-## Architecture
-
-### Pipeline Flow
-
-```
-Sources → Stages → Writers
-   ↓        ↓        ↓
-Raw Docs → Processed → Outputs
-```
-
-### Key Components
-
-- **Sources** - Data ingestion (local JSONL, HuggingFace streaming, PDF)
-  - Supports single files, multiple files, directories, and glob patterns
-  - Per-file statistics tracking
-- **Stages** - Processing steps (license, quality, dedup, PII)
-- **Writers** - Output formats (Parquet, JSONL)
-  - Includes `source_file` field for multi-file sources
-- **Analytics** - Per-stage metrics and events
-  - Per-file breakdowns available
-- **Checkpoints** - Resume state per source
-  - Includes per-file statistics
-
-### Extensibility Points
-
-- **Sources** - Add via `sources/registry.py`
-- **Stages** - Add via `stages/registry.py`
-- **PII Detectors** - Add via `pii/registry.py`
-- **Writers** - Add via `writers/registry.py`
-- **Tokenizers** - Add via `plugins/registry.py`
+---
 
 ## License
-
 MIT
-
-## Data Tracking
-
-### Per-File Statistics
-
-When processing multiple files in a single source, the platform automatically tracks:
-
-- **Per-file processed counts** - How many documents from each file
-- **Per-file written counts** - How many documents passed all stages
-- **Per-file rejected counts** - How many documents were rejected
-- **Source file tracking** - Each document includes `source_file` field
-
-**View per-file stats:**
-
-```bash
-# In logs during processing
-# Look for: "Source X per-file statistics:"
-
-# In dashboard
-python -m clean_corpus.cli monitor storage_example --unified
-# See "Per-File Statistics" table
-
-# In checkpoint report
-python scripts/checkpoint_report.py storage_example
-```
-
-**Output data includes:**
-- `source_file` field in Parquet documents
-- `source_file` field in metadata files
-- `source_file` field in rejection logs
-
-### PDF Processing Features
-
-**Chunking Strategies:**
-- `page` - Each PDF page becomes a separate document (best for long documents)
-- `document` - Entire PDF becomes one document (best for short PDFs)
-- `fixed_size` - Split into fixed-size chunks with overlap (best for very long documents)
-
-**Schema Configuration:**
-- Global schema applies to all PDFs by default
-- Directory-specific schemas can override global settings
-- Supports text transformations (prefix/suffix)
-- Metadata field mapping
-- Default license assignment
-
-### Web PDF Downloader
-
-Download PDFs from websites and process them with automatic language detection:
-
-```yaml
-sources:
-  - name: "ncert_hindi"
-    kind: "web_pdf"
-    urls:
-      - "https://ncert.nic.in/textbook/pdf/iehi101.pdf"
-    download_dir: "downloads/ncert/hindi"
-    language: "hi"  # Hindi (ISO 639-1)
-    auto_detect_language: true
-    metadata:
-      source: "NCERT"
-      license: "CC-BY-NC"
-      category: "textbook"
-```
-
-**Features:**
-- Download from single URL, list of URLs, or URL patterns
-- Automatic language detection from PDF content
-- Multi-language support (Hindi, Tamil, English, etc.)
-- Resume support (skip already downloaded files)
-- Metadata extraction (title, author, language, source URL)
-
-See `examples/build_web_pdf_ncert.yaml` for complete configuration examples.
-
-## Contributing
-
-See examples in `examples/` directory for adding custom sources, stages, and detectors.
-
-**New Features:**
-- Multi-file processing examples: `examples/build_local_jsonl.yaml`
-- PDF processing examples: `examples/build_pdf.yaml`
-- Web PDF downloader examples: `examples/build_web_pdf_ncert.yaml`
-- Multi-source examples: `examples/build_multi_source.yaml`
