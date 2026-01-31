@@ -38,6 +38,7 @@ storage/
 storage_example/
 *.parquet
 *.jsonl
+input-output-exec/
 
 # Logs
 *.log

@@ -43,6 +43,8 @@ class SourceSpec:
     url_field: str = "url"
     # Hugging Face dataset config name (optional, e.g. "v1_7" for allenai/dolma)
     config: Optional[str] = None
+    # Hugging Face data_dir for subsets (optional, e.g. "verified/hin" for ai4bharat/sangraha)
+    data_dir: Optional[str] = None
     # PDF-specific options (optional, only used when kind="pdf")
     chunk_mode: str = "page"  # page | document | fixed_size
     extractor: str = "pymupdf"  # pymupdf | pdfplumber | pypdf2
@@ -66,6 +68,8 @@ class SourceSpec:
     metadata: Optional[Dict[str, Any]] = None  # Additional metadata to add to documents
     # Entry-level processing overrides (optional, for unified configuration)
     processing: Optional[Dict[str, Any]] = None  # Processing configuration overrides for this source
+    # Limit number of documents to process (optional)
+    limit_docs: Optional[int] = None
     # Data use tag for filtering (e.g. training | sft | alignment); overrides output.data_tag per source
     data_tag: Optional[str] = None
 

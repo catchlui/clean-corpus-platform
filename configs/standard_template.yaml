@@ -280,11 +280,19 @@ sources:
   # - name: "hf_streaming"
   #   type: "streaming"
   #   kind: "hf_stream"
-  #   dataset: "common-pile/comma_v0.1_training_dataset"  # HuggingFace dataset name
-  #   split: "train"                # Dataset split
+  #   dataset: "allenai/dolma"
+  #   config: "v1_7"            # Optional: dataset configuration name
+  #   split: "train"
   #   text_field: "text"
-  #   license_field: "license"
-  #   url_field: "url"
+  
+  # Example: Sangraha Indic Dataset (Verified Hindi subset)
+  # - name: "sangraha_hindi"
+  #   kind: "hf_stream"
+  #   type: "streaming"  # Added missing 'type' field
+  #   dataset: "ai4bharat/sangraha"
+  #   data_dir: "verified/hin"  # Required for Sangraha subset selection
+  #   split: "train"
+  #   text_field: "text"
   
   # --------------------------------------------------------------------------
   # SOURCE TYPE 5: Multiple Sources (Mixed Types)

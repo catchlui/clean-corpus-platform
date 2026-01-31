@@ -1,0 +1,65 @@
+run:
+  # Auto-generate Run ID for Sangraha
+  run_id_auto:
+    enabled: true
+    prefix_digits: 4
+    suffix_digits: 6
+    include_input_name: true
+    input_name_from: "source"
+  out_dir: "Input-output-exec/runs/{run_id}"
+  shard_docs: 5000
+  policy_version: "policy_v1"
+
+execution:
+  mode: "local"
+
+global:
+  checkpoint_dir: "Input-output-exec/checkpoints"
+  log_dir: "Input-output-exec/logs"
+  processing:
+    unicode_normalize: true
+    global_fingerprints:
+      enabled: true
+      root_path: "Input-output-exec/fingerprints_global"
+      simhash: { enabled: true }
+      minhash: { enabled: true }
+      chunk_hash: { enabled: true }
+
+sources:
+  - name: "sangraha_hindi_verified"
+    kind: "hf_stream"
+    type: "streaming"  # Added missing 'type' field
+    dataset: "ai4bharat/sangraha"
+    data_dir: "verified/hin"  # Sangraha subset selection
+    split: "train"
+    text_field: "text"
+    limit_docs: 100           # Limit for quick test
+    metadata:
+      source: "AI4Bharat"
+      collection: "Sangraha"
+      language: "hi"
+      subset: "verified"
+
+policies:
+  licenses: "src/clean_corpus/policies/defaults/licenses.yaml"
+  quality: "src/clean_corpus/policies/defaults/quality.yaml"
+  pii: "src/clean_corpus/policies/defaults/pii.yaml"
+  curriculum: "src/clean_corpus/policies/defaults/curriculum.yaml"
+
+stages:
+  - license_gate
+  - sanitize
+  - unicode_normalize
+  - pii_policy_gate
+  - exact_dedup
+  - global_dedup
+  - quality_gate
+  - curriculum_eligibility
+
+output:
+  data_tag: "training"
+  layout: "structured"
+  corpus_format: "dolma"
+  format_options:
+    dolma:
+      include_all_metadata: true

@@ -36,21 +36,27 @@ class HFStreamingSource(DataSource):
         # If you downloaded via huggingface-cli download, it goes to the cache
         # and will be used automatically here
         config = getattr(self.spec, "config", None)
+        data_dir = getattr(self.spec, "data_dir", None)
+        
+        load_kwargs = {
+            "path": self.spec.dataset,
+            "split": self.spec.split,
+            "streaming": True,
+        }
         if config:
-            ds = load_dataset(
-                self.spec.dataset,
-                config,
-                split=self.spec.split,
-                streaming=True,
-            )
-        else:
-            ds = load_dataset(
-                self.spec.dataset,
-                split=self.spec.split,
-                streaming=True,
-            )
+            load_kwargs["name"] = config
+        if data_dir:
+            load_kwargs["data_dir"] = data_dir
+            
+        ds = load_dataset(**load_kwargs)
+        
+        count = 0
+        limit = getattr(self.spec, "limit_docs", None)
         
         for ex in ds:
+            if limit is not None and count >= limit:
+                break
+                
             yield RawDocument(
                 raw_id=str(ex.get("id", "")),
                 text=ex.get(self.spec.text_field, "") or "",
@@ -60,3 +66,4 @@ class HFStreamingSource(DataSource):
                 created_at=None,
                 extra=ex,
             )
+            count += 1
