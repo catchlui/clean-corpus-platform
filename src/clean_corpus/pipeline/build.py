@@ -14,6 +14,7 @@ This module is the 'entrypoint' for the Data Platform team.
 """
 
 from __future__ import annotations
+import collections
 from typing import Dict, Any, List, Optional
 import os, time, logging
 from tqdm import tqdm
@@ -386,7 +387,7 @@ def build_local(cfg: Dict[str, Any]) -> None:
                         sink.flush_aggregates()
                         if rejs:
                             if layout == "structured":
-                                by_cat = defaultdict(list)
+                                by_cat = collections.defaultdict(list)
                                 for r in rejs:
                                     by_cat[get_rejection_category(r.get("reason_code", ""))].append(r)
                                 for cat, items in by_cat.items():
@@ -436,7 +437,7 @@ def build_local(cfg: Dict[str, Any]) -> None:
                     sink.flush_aggregates()
                     if rejs:
                         if layout == "structured":
-                            by_cat = defaultdict(list)
+                            by_cat = collections.defaultdict(list)
                             for r in rejs:
                                 by_cat[get_rejection_category(r.get("reason_code", ""))].append(r)
                             for cat, items in by_cat.items():
@@ -459,7 +460,7 @@ def build_local(cfg: Dict[str, Any]) -> None:
                     sink.flush_aggregates()
                     if rejs:
                         if layout == "structured":
-                            by_cat = defaultdict(list)
+                            by_cat = collections.defaultdict(list)
                             for r in rejs:
                                 by_cat[get_rejection_category(r.get("reason_code", ""))].append(r)
                             for cat, items in by_cat.items():
@@ -512,7 +513,7 @@ def build_local(cfg: Dict[str, Any]) -> None:
         sink.flush_aggregates()
         if rejs:
             if layout == "structured":
-                by_cat = defaultdict(list)
+                by_cat = collections.defaultdict(list)
                 for r in rejs:
                     by_cat[get_rejection_category(r.get("reason_code", ""))].append(r)
                 for cat, items in by_cat.items():
