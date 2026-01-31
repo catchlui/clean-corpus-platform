@@ -1,0 +1,39 @@
+run:
+  run_id: "StackExchange-RedPajama_2026-01-28"
+  out_dir: "storage_stackexchange"
+  shard_docs: 10000
+  log_every_docs: 10000
+  checkpoint_every_docs: 50000
+  policy_version: "policy_v1"
+
+execution:
+  mode: ray_data  # Recommended for 20B token datasets
+
+sources:
+  - name: "stackexchange"
+    type: "streaming"
+    kind: "hf_stream"
+    dataset: "togethercomputer/RedPajama-Data-1T"  # Verify exact dataset name
+    split: "stackexchange"  # Verify split name
+    text_field: "text"
+    license_field: "license"  # May need to map from metadata
+    url_field: "url"
+
+policies:
+  licenses: "src/clean_corpus/policies/defaults/licenses.yaml"
+  quality: "src/clean_corpus/policies/defaults/quality.yaml"
+  pii: "src/clean_corpus/policies/defaults/pii.yaml"
+  curriculum: "src/clean_corpus/policies/defaults/curriculum.yaml"
+
+stages:
+  - license_gate
+  - sanitize
+  - exact_dedup
+  - quality_gate
+  - pii_policy_gate
+  - semantic_simhash
+  - curriculum_eligibility
+
+output:
+  corpus_format: parquet
+  metadata_format: parquet_v1

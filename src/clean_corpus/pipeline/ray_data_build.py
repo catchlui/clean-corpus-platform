@@ -52,6 +52,11 @@ def build_ray_data(cfg: Dict[str, Any], ray_cfg: Dict[str, Any]) -> None:
 
     tokenizer_name = cfg.get("tokenizer", {}).get("name", "custom_tok")
 
+    # Set global PDF configuration if provided
+    if "pdf" in cfg:
+        from ..sources.registry import set_global_pdf_config
+        set_global_pdf_config(cfg["pdf"])
+
     # stages (doc-level stages; we execute per row inside map_batches)
     from ..stages.registry import make_stages
     stages = make_stages(cfg.get("stages", []), cfg["policies"], tokenizer_name=tokenizer_name)

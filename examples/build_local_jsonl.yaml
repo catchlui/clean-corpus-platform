@@ -10,14 +10,49 @@ execution:
   mode: local
 
 sources:
-  - name: "internal_jsonl"
+  # Process all sample files together as one source
+  # This demonstrates multi-file processing capability
+  - name: "all_samples"
     type: "batch"
     kind: "local_jsonl"
-    dataset: "examples/sample_internal.jsonl"
+    dataset:
+      - "examples/sample_internal.jsonl"
+      - "examples/sample_additional.jsonl"
+      - "examples/sample_tech.jsonl"
     split: "train"
     text_field: "text"
     license_field: "license"
     url_field: "url"
+  
+  # Alternative: Single file (still supported)
+  # - name: "single_file"
+  #   type: "batch"
+  #   kind: "local_jsonl"
+  #   dataset: "examples/sample_internal.jsonl"
+  #   split: "train"
+  #   text_field: "text"
+  #   license_field: "license"
+  #   url_field: "url"
+  
+  # Alternative: Directory (processes all .jsonl files in directory)
+  # - name: "directory_source"
+  #   type: "batch"
+  #   kind: "local_jsonl"
+  #   dataset: "examples/"  # Processes all .jsonl files in examples/
+  #   split: "train"
+  #   text_field: "text"
+  #   license_field: "license"
+  #   url_field: "url"
+  
+  # Alternative: Glob pattern (processes matching files)
+  # - name: "glob_pattern"
+  #   type: "batch"
+  #   kind: "local_jsonl"
+  #   dataset: "examples/sample_*.jsonl"  # Matches all files starting with "sample_"
+  #   split: "train"
+  #   text_field: "text"
+  #   license_field: "license"
+  #   url_field: "url"
 
 policies:
   licenses: "src/clean_corpus/policies/defaults/licenses.yaml"

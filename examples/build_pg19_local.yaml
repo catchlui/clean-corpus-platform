@@ -1,0 +1,44 @@
+run:
+  run_id: "PG19_Local_2026-01-29"
+  out_dir: "storage_pg19"
+  shard_docs: 1000
+  log_every_docs: 100
+  checkpoint_every_docs: 1000
+  policy_version: "policy_v1"
+
+execution:
+  mode: local
+
+sources:
+  # Option 1: Use hf_stream with HuggingFace cache (recommended)
+  # The platform will automatically use your locally downloaded dataset
+  # if it's in the HuggingFace cache directory
+  - name: "pg19"
+    type: "streaming"
+    kind: "hf_stream"
+    dataset: "datasets/pg19"  # HuggingFace dataset name
+    split: "train"  # or "test", "validation" - check available splits
+    text_field: "text"  # Adjust based on pg19 schema
+    license_field: "license"  # If available
+    url_field: "url"  # If available
+    # Optional: If you downloaded to a custom directory, set HF_HOME env var instead
+    # Or convert to JSONL and use local_jsonl source (see docs)
+
+policies:
+  licenses: "src/clean_corpus/policies/defaults/licenses.yaml"
+  quality: "src/clean_corpus/policies/defaults/quality.yaml"
+  pii: "src/clean_corpus/policies/defaults/pii.yaml"
+  curriculum: "src/clean_corpus/policies/defaults/curriculum.yaml"
+
+stages:
+  - license_gate
+  - sanitize
+  - exact_dedup
+  - quality_gate
+  - pii_policy_gate
+  - semantic_simhash
+  - curriculum_eligibility
+
+output:
+  corpus_format: parquet
+  metadata_format: parquet_v1

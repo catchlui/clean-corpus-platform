@@ -1,0 +1,39 @@
+run:
+  run_id: "Wikipedia-Dolma_2026-01-28"
+  out_dir: "storage_wikipedia"
+  shard_docs: 10000
+  log_every_docs: 10000
+  checkpoint_every_docs: 50000
+  policy_version: "policy_v1"
+
+execution:
+  mode: ray_data  # Recommended for large datasets
+
+sources:
+  - name: "wikipedia"
+    type: "streaming"
+    kind: "hf_stream"
+    dataset: "allenai/dolma"  # Verify exact dataset name for Wikipedia slice
+    split: "wikipedia"  # Verify split name
+    text_field: "text"
+    license_field: "license"
+    url_field: "url"
+
+policies:
+  licenses: "src/clean_corpus/policies/defaults/licenses.yaml"
+  quality: "src/clean_corpus/policies/defaults/quality.yaml"
+  pii: "src/clean_corpus/policies/defaults/pii.yaml"
+  curriculum: "src/clean_corpus/policies/defaults/curriculum.yaml"
+
+stages:
+  - license_gate
+  - sanitize
+  - exact_dedup
+  - quality_gate
+  - pii_policy_gate
+  - semantic_simhash
+  - curriculum_eligibility
+
+output:
+  corpus_format: parquet
+  metadata_format: parquet_v1

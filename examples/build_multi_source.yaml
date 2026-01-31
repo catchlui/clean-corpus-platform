@@ -1,0 +1,60 @@
+run:
+  run_id: "MultiSource-v1_2026-01-28"
+  out_dir: "storage_multi"
+  shard_docs: 10000
+  log_every_docs: 10000
+  checkpoint_every_docs: 50000
+  policy_version: "policy_v1"
+
+execution:
+  mode: ray_data  # Recommended for multiple large sources
+
+# Process multiple datasets in one run
+sources:
+  - name: "wikipedia"
+    type: "streaming"
+    kind: "hf_stream"
+    dataset: "allenai/dolma"  # Verify exact name
+    split: "wikipedia"
+    text_field: "text"
+    license_field: "license"
+    url_field: "url"
+
+  - name: "gutenberg"
+    type: "streaming"
+    kind: "hf_stream"
+    dataset: "allenai/dolma"  # Verify exact name
+    split: "gutenberg"
+    text_field: "text"
+    license_field: "license"
+    url_field: "url"
+
+  # Add more sources as needed
+  # - name: "stackexchange"
+  #   type: "streaming"
+  #   kind: "hf_stream"
+  #   dataset: "togethercomputer/RedPajama-Data-1T"
+  #   split: "stackexchange"
+  #   text_field: "text"
+  #   license_field: "license"
+  #   url_field: "url"
+
+policies:
+  licenses: "src/clean_corpus/policies/defaults/licenses.yaml"
+  quality: "src/clean_corpus/policies/defaults/quality.yaml"
+  pii: "src/clean_corpus/policies/defaults/pii.yaml"
+  curriculum: "src/clean_corpus/policies/defaults/curriculum.yaml"
+
+stages:
+  - license_gate
+  - sanitize
+  - exact_dedup
+  - quality_gate
+  - pii_policy_gate
+  - near_dup_minhash
+  - semantic_simhash
+  - curriculum_eligibility
+
+output:
+  corpus_format: parquet
+  metadata_format: parquet_v1

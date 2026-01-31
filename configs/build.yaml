@@ -31,9 +31,9 @@ stages:
   - exact_dedup
   - quality_gate
   - pii_policy_gate
-  - curriculum_eligibility
-    - near_dup_minhash
+  - near_dup_minhash
   - semantic_simhash
+  - curriculum_eligibility
   - tokenize
   # tokenization + topics are intentionally left as plugins for Tokenizer/Curriculum teams
 

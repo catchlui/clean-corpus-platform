@@ -20,6 +20,8 @@ from __future__ import annotations
 from typing import Any, Dict
 from ..pipeline.context import Document, Decision
 from .base import Stage
+# Import pii module to trigger auto-registration
+import clean_corpus.pii  # noqa: F401
 from ..pii.registry import detect_all
 from ..pii.redact import redact_text
 

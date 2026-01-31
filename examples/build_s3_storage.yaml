@@ -1,0 +1,63 @@
+run:
+  run_id: "S3Storage-Example_2026-01-28"
+  out_dir: "s3://my-bucket/clean-corpus/runs"  # S3 path
+  shard_docs: 5000
+  log_every_docs: 1000
+  checkpoint_every_docs: 5000
+  policy_version: "policy_v1"
+
+execution:
+  mode: local  # or ray_data for large scale
+
+# Storage configuration
+storage:
+  type: s3
+  bucket: my-bucket
+  prefix: clean-corpus/runs  # Optional prefix
+  region: us-east-1
+  # Credentials can be provided here or via AWS credentials file/environment
+  # aws_access_key_id: YOUR_KEY
+  # aws_secret_access_key: YOUR_SECRET
+  # endpoint_url: https://s3.amazonaws.com  # For S3-compatible services
+
+# Per-output storage (optional - overrides global)
+# output_storage:
+#   docs:
+#     type: s3
+#     bucket: corpus-bucket
+#     prefix: corpus
+#   metadata:
+#     type: s3
+#     bucket: metadata-bucket
+#     prefix: metadata
+#   analytics:
+#     type: local  # Keep analytics local for faster access
+
+sources:
+  - name: "internal_jsonl"
+    type: "batch"
+    kind: "local_jsonl"
+    dataset: "examples/sample_internal.jsonl"
+    split: "train"
+    text_field: "text"
+    license_field: "license"
+    url_field: "url"
+
+policies:
+  licenses: "src/clean_corpus/policies/defaults/licenses.yaml"
+  quality: "src/clean_corpus/policies/defaults/quality.yaml"
+  pii: "src/clean_corpus/policies/defaults/pii.yaml"
+  curriculum: "src/clean_corpus/policies/defaults/curriculum.yaml"
+
+stages:
+  - license_gate
+  - sanitize
+  - exact_dedup
+  - quality_gate
+  - pii_policy_gate
+  - semantic_simhash
+  - curriculum_eligibility
+
+output:
+  corpus_format: parquet
+  metadata_format: parquet_v1

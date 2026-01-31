@@ -1,0 +1,40 @@
+run:
+  run_id: "CommonPile-v0.1_2026-01-28"
+  out_dir: "storage_common_pile"
+  shard_docs: 10000
+  log_every_docs: 10000
+  checkpoint_every_docs: 50000
+  policy_version: "policy_v1"
+
+execution:
+  mode: ray_data  # Use Ray Data for large-scale processing
+
+sources:
+  - name: "common_pile"
+    type: "streaming"
+    kind: "hf_stream"
+    dataset: "common-pile/comma_v0.1_training_dataset"  # Verify exact dataset name on HuggingFace
+    split: "train"
+    text_field: "text"
+    license_field: "license"
+    url_field: "url"
+
+policies:
+  licenses: "src/clean_corpus/policies/defaults/licenses.yaml"
+  quality: "src/clean_corpus/policies/defaults/quality.yaml"
+  pii: "src/clean_corpus/policies/defaults/pii.yaml"
+  curriculum: "src/clean_corpus/policies/defaults/curriculum.yaml"
+
+stages:
+  - license_gate
+  - sanitize
+  - exact_dedup
+  - quality_gate
+  - pii_policy_gate
+  - near_dup_minhash
+  - semantic_simhash
+  - curriculum_eligibility
+
+output:
+  corpus_format: parquet
+  metadata_format: parquet_v1

@@ -1,0 +1,122 @@
+run:
+  run_id: "NCERT_Web_PDF_2026-01-29"
+  out_dir: "storage_ncert"
+  shard_docs: 100
+  log_every_docs: 10
+  checkpoint_every_docs: 50
+  policy_version: "policy_v1"
+
+execution:
+  mode: local
+
+# Global PDF configuration
+pdf:
+  chunk_mode: "page"  # page | document | fixed_size
+  extractor: "pymupdf"  # pymupdf | pdfplumber | pypdf2
+  min_text_length: 200
+  metadata_fields: ["title", "author", "page_number", "language"]
+  
+  # Schema configuration
+  schema:
+    default_license: "CC-BY-NC"  # NCERT books typically CC-BY-NC
+    text_prefix: ""  # Optional prefix
+    text_suffix: ""  # Optional suffix
+    metadata_mapping:
+      document_title: "title"
+      document_author: "author"
+      document_language: "language"
+
+sources:
+  # Example 1: Download specific NCERT PDFs
+  # To find actual PDF URLs:
+  # 1. Visit https://ncert.nic.in/textbook.php?bhsr1=0-26 (or your class)
+  # 2. Select class and subject from dropdowns
+  # 3. Click on book title to view PDF
+  # 4. Copy the PDF URL from browser address bar
+  # 5. Or use: python scripts/discover_ncert_pdfs.py --class 10 --subject hindi --output ncert_urls.yaml
+  
+  - name: "ncert_hindi"
+    type: "batch"
+    kind: "web_pdf"
+    urls:
+      # Replace these with actual NCERT PDF URLs from the website
+      # Example pattern: https://ncert.nic.in/textbook/pdf/[bookcode].pdf
+      # To find URLs: Visit https://ncert.nic.in/textbook.php?bhsr1=0-26
+      # Select class → subject → book → copy PDF URL
+      - "https://ncert.nic.in/textbook/pdf/iehi101.pdf"  # Example - replace with actual URL
+      - "https://ncert.nic.in/textbook/pdf/iehi102.pdf"  # Example - replace with actual URL
+    download_dir: "downloads/ncert/hindi"
+    language: "hi"  # Hindi (ISO 639-1)
+    auto_detect_language: true  # Verify language from content
+    timeout: 30
+    max_retries: 3
+    metadata:
+      source: "NCERT"
+      license: "CC-BY-NC"
+      category: "textbook"
+      subject: "Hindi"
+      publisher: "National Council of Educational Research and Training"
+  
+  # Example 2: Download English NCERT PDFs
+  - name: "ncert_english"
+    type: "batch"
+    kind: "web_pdf"
+    urls:
+      - "https://ncert.nic.in/textbook/pdf/ieen101.pdf"  # Example URL
+      - "https://ncert.nic.in/textbook/pdf/ieen102.pdf"  # Example URL
+    download_dir: "downloads/ncert/english"
+    language: "en"  # English
+    auto_detect_language: true
+    metadata:
+      source: "NCERT"
+      license: "CC-BY-NC"
+      category: "textbook"
+      subject: "English"
+      publisher: "NCERT"
+  
+  # Example 3: Download Tamil NCERT PDFs
+  - name: "ncert_tamil"
+    type: "batch"
+    kind: "web_pdf"
+    urls:
+      - "https://ncert.nic.in/textbook/pdf/ieta101.pdf"  # Example URL
+    download_dir: "downloads/ncert/tamil"
+    language: "ta"  # Tamil
+    auto_detect_language: true
+    metadata:
+      source: "NCERT"
+      license: "CC-BY-NC"
+      category: "textbook"
+      subject: "Tamil"
+      publisher: "NCERT"
+  
+  # Example 4: Scrape PDFs from a webpage (pattern matching)
+  # Uncomment to use:
+  # - name: "ncert_all"
+  #   type: "batch"
+  #   kind: "web_pdf"
+  #   url_pattern: "https://ncert.nic.in/textbook/pdf/*.pdf"
+  #   base_url: "https://ncert.nic.in/textbook/"
+  #   download_dir: "downloads/ncert/all"
+  #   auto_detect_language: true
+  #   metadata:
+  #     source: "NCERT"
+  #     license: "CC-BY-NC"
+  #     category: "textbook"
+
+policies:
+  licenses: "src/clean_corpus/policies/defaults/licenses.yaml"
+  quality: "src/clean_corpus/policies/defaults/quality.yaml"
+  pii: "src/clean_corpus/policies/defaults/pii.yaml"
+  curriculum: "src/clean_corpus/policies/defaults/curriculum.yaml"
+
+stages:
+  - license_gate
+  - sanitize
+  - quality_gate
+  - pii_policy_gate
+  - curriculum_eligibility
+
+output:
+  corpus_format: parquet
+  metadata_format: parquet_v1

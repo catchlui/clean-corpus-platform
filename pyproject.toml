@@ -1,24 +1,108 @@
 [project]
 name = "clean-corpus-platform"
 version = "0.6.0"
-description = "Policy-driven, restartable, analytics-first corpus preprocessing platform (Ray-ready)."
-requires-python = ">=3.10"
-authors = [{name="Clean Corpus Team"}]
+description = "Policy-driven, restartable, analytics-first corpus preprocessing platform"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "Clean Corpus Team"}
+]
+keywords = ["corpus", "preprocessing", "nlp", "data-pipeline", "deduplication", "pii"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Text Processing",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
 dependencies = [
-  "pyyaml>=6.0",
-  "pydantic>=2.0",
-  "datasets>=2.18.0",
-  "pyarrow>=14.0.0",
-  "tqdm>=4.66.0",
-  "rich>=13.0.0",
-  "ray[default]>=2.10.0",
-  "datasketch>=1.6.5",
-  "numpy>=1.26.0",
+    "pyyaml>=6.0",
+    "tqdm>=4.65.0",
+    "pyarrow>=12.0.0",
+    "numpy>=1.24.0",
+    "datasketch>=1.6.0",
+    "datasets>=2.14.0",
+    "pandas>=2.0.0",
+    "rich>=13.0.0",
+]
+
+[project.optional-dependencies]
+s3 = [
+    "boto3>=1.28.0",
+]
+ray = [
+    "ray[data]>=2.8.0",
+]
+pdf = [
+    "pymupdf>=1.23.0",  # PyMuPDF (recommended, fast and accurate)
+]
+web_pdf = [
+    "requests>=2.31.0",  # For downloading PDFs from URLs
+    "beautifulsoup4>=4.12.0",  # For scraping PDF URLs from webpages
+    "langdetect>=1.0.9",  # For automatic language detection
+]
+web_pdf_playwright = [
+    "playwright>=1.40.0",  # For JavaScript-heavy websites (better than Selenium)
+]
+web_pdf_selenium = [
+    "selenium>=4.15.0",  # Alternative to Playwright (legacy)
+    "webdriver-manager>=4.0.0",  # Automatic browser driver management
+]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.7.0",
+    "ruff>=0.1.0",
+    "mypy>=1.5.0",
+]
+all = [
+    "boto3>=1.28.0",
+    "ray[data]>=2.8.0",
+    "pymupdf>=1.23.0",
+    "requests>=2.31.0",
+    "beautifulsoup4>=4.12.0",
+    "langdetect>=1.0.9",
 ]
 
 [project.scripts]
 clean-corpus = "clean_corpus.cli:main"
 
+[project.urls]
+Homepage = "https://github.com/your-org/clean-corpus-platform"
+Documentation = "https://github.com/your-org/clean-corpus-platform/docs"
+Repository = "https://github.com/your-org/clean-corpus-platform"
+Issues = "https://github.com/your-org/clean-corpus-platform/issues"
+
 [build-system]
-requires = ["setuptools>=68"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/clean_corpus"]
+
+[tool.black]
+line-length = 100
+target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
+
+[tool.ruff]
+line-length = 100
+target-version = "py38"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+packages = ["src/clean_corpus"]

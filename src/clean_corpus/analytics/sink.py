@@ -91,9 +91,45 @@ class AnalyticsSink:
         self._append_parquet(p, rows)
         self._agg.clear()
 
+    def _normalize_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize row for Parquet compatibility: handle empty dicts."""
+        normalized = {}
+        for k, v in row.items():
+            if isinstance(v, dict) and len(v) == 0:
+                # Empty dicts cause Parquet struct type errors - exclude them or use None
+                # PyArrow can handle None for optional struct fields
+                normalized[k] = None
+            else:
+                normalized[k] = v
+        return normalized
+    
     def _append_parquet(self, path: str, rows: List[Dict[str, Any]]) -> None:
-        table = pa.Table.from_pylist(rows)
+        # Normalize rows: convert empty dicts to None for Parquet compatibility
+        normalized_rows = [self._normalize_row(row) for row in rows]
+        
+        table = pa.Table.from_pylist(normalized_rows)
+        
+        # Check if file exists and is valid
         if os.path.exists(path):
-            existing = pq.read_table(path)
-            table = pa.concat_tables([existing, table])
+            file_size = os.path.getsize(path)
+            if file_size == 0:
+                # Corrupted/empty file - remove it and start fresh
+                os.remove(path)
+            else:
+                try:
+                    existing = pq.read_table(path)
+                    # Normalize existing rows to ensure schema consistency
+                    existing_rows = existing.to_pylist()
+                    normalized_existing = [self._normalize_row(row) for row in existing_rows]
+                    # Recreate table with normalized data, preserving schema if possible
+                    try:
+                        existing_table = pa.Table.from_pylist(normalized_existing, schema=existing.schema)
+                    except Exception:
+                        # If schema doesn't match, infer new schema
+                        existing_table = pa.Table.from_pylist(normalized_existing)
+                    table = pa.concat_tables([existing_table, table])
+                except Exception as e:
+                    # If file is corrupted, remove it and start fresh
+                    os.remove(path)
+        
         pq.write_table(table, path, compression="zstd")

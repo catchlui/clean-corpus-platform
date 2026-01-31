@@ -24,6 +24,7 @@ class Document:
     license: Optional[str] = None
     license_version: Optional[str] = None
     lang: str = "en"
+    source_file: Optional[str] = None  # Original file path for multi-file sources
 
     # cheap stats
     chars: Optional[int] = None

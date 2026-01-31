@@ -15,10 +15,23 @@ from typing import Dict, List
 from ..policies.loader import load_yaml
 from .impl import LicenseGate, Sanitize, ExactDedup, QualityGate
 from .pii_policy import PIIPolicyGate
-from .near_dup_minhash import NearDupMinHash
-from .semantic_simhash import SemanticSimHash
-from .tokenize_plugin import TokenizeStage
 from .curriculum_eligibility import CurriculumEligibility
+
+# Optional imports for stages with heavy dependencies
+try:
+    from .near_dup_minhash import NearDupMinHash
+except ImportError:
+    NearDupMinHash = None
+
+try:
+    from .semantic_simhash import SemanticSimHash
+except ImportError:
+    SemanticSimHash = None
+
+try:
+    from .tokenize_plugin import TokenizeStage
+except ImportError:
+    TokenizeStage = None
 
 def make_stages(stage_names: List[str], policies: Dict[str, str], *, tokenizer_name: str = "custom_tok"):
     lic_pol = load_yaml(policies["licenses"])
@@ -31,13 +44,18 @@ def make_stages(stage_names: List[str], policies: Dict[str, str], *, tokenizer_n
         "license_gate": LicenseGate(lic_pol),
         "sanitize": Sanitize(),
         "exact_dedup": ExactDedup(),
-        "near_dup_minhash": NearDupMinHash(threshold=0.9, hard_reject=False),
-        "semantic_simhash": SemanticSimHash(),
         "quality_gate": QualityGate(qual_pol),
         "pii_policy_gate": PIIPolicyGate(pii_pol),
-        "tokenize": TokenizeStage(tokenizer_name=tokenizer_name),
         "curriculum_eligibility": CurriculumEligibility(cur_pol),
     }
+    
+    # Add optional stages if available
+    if NearDupMinHash is not None:
+        name_to_stage["near_dup_minhash"] = NearDupMinHash(threshold=0.9, hard_reject=False)
+    if SemanticSimHash is not None:
+        name_to_stage["semantic_simhash"] = SemanticSimHash()
+    if TokenizeStage is not None:
+        name_to_stage["tokenize"] = TokenizeStage(tokenizer_name=tokenizer_name)
 
     stages = []
     for n in stage_names:

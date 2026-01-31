@@ -13,6 +13,7 @@ Execution modes (config: execution.mode):
 
 from __future__ import annotations
 import argparse
+import os
 import yaml
 from .logging_ import setup_logging
 from .pipeline.build import build_local, build_ray
@@ -35,16 +36,33 @@ def main() -> None:
     pd.add_argument("--a", required=True)
     pd.add_argument("--b", required=True)
 
+    pm = sub.add_parser("monitor")
+    pm.add_argument("output_dir", nargs="?", default="storage_example", help="Output directory to monitor")
+    pm.add_argument("--refresh", "-r", type=float, default=5.0, metavar="SECONDS", help="Refresh interval in seconds (default: 5.0)")
+    pm.add_argument("--unified", action="store_true", help="Use unified Monitor+Analytics app (default: legacy dashboard)")
+
     args = p.parse_args()
 
     if args.cmd == "policy-diff":
         print(policy_diff_main(args.a, args.b))
         return
 
+    if args.cmd == "monitor":
+        if args.unified:
+            from .monitor.unified_app import create_unified_app
+            create_unified_app(args.output_dir, args.refresh)
+        else:
+            from .monitor.dashboard import create_dashboard
+            create_dashboard(args.output_dir, args.refresh)
+        return
+
     cfg = _load_yaml(args.config)
     run = cfg.get("run", {})
     out_dir = run.get("out_dir", "storage")
     setup_logging(out_dir=out_dir, run_id=run.get("run_id", "run"))
+    
+    # Store config path in environment for manifest
+    os.environ['CLEAN_CORPUS_CONFIG_PATH'] = os.path.abspath(args.config)
 
     mode = cfg.get("execution", {}).get("mode", "local").lower()
     if mode == "ray_data":

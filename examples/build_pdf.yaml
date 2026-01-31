@@ -1,0 +1,87 @@
+run:
+  run_id: "PDF_Example_2026-01-28"
+  out_dir: "storage_pdf"
+  shard_docs: 1000
+  log_every_docs: 100
+  checkpoint_every_docs: 1000
+  policy_version: "policy_v1"
+
+execution:
+  mode: local
+
+# Global PDF configuration (applies to all PDF sources unless overridden)
+pdf:
+  # Default chunking strategy
+  chunk_mode: "page"  # page | document | fixed_size
+  extractor: "pymupdf"  # pymupdf | pdfplumber | pypdf2
+  min_text_length: 200
+  metadata_fields: ["title", "author", "page_number"]
+  
+  # Fixed-size chunking defaults (used when chunk_mode="fixed_size")
+  chunk_size: 1000  # Characters per chunk
+  chunk_overlap: 200  # Overlap between chunks
+  
+  # Global schema configuration
+  schema:
+    default_license: "CC-BY"  # Default license for PDFs without license info
+    text_prefix: ""  # Optional prefix to add to all extracted text
+    text_suffix: ""  # Optional suffix to add to all extracted text
+    metadata_mapping:  # Map PDF metadata fields to output fields
+      document_title: "title"
+      document_author: "author"
+
+sources:
+  # Process PDFs page by page (uses global config)
+  - name: "research_papers"
+    type: "batch"
+    kind: "pdf"
+    dataset: "data/papers/"  # Directory containing PDF files
+    # chunk_mode, extractor, etc. inherit from global pdf config
+  
+  # Process entire PDFs as single documents (overrides global chunk_mode)
+  - name: "reports"
+    type: "batch"
+    kind: "pdf"
+    dataset: "data/reports/"  # Directory of PDF files
+    chunk_mode: "document"   # Override: extract entire PDF as one document
+    min_text_length: 500     # Override: higher minimum length
+  
+  # Process PDFs with fixed-size chunking (overrides global chunk_mode)
+  - name: "long_documents"
+    type: "batch"
+    kind: "pdf"
+    dataset: "data/long_docs/"
+    chunk_mode: "fixed_size"  # Split into fixed-size chunks
+    chunk_size: 2000           # Override: larger chunks
+    chunk_overlap: 400         # Override: more overlap
+  
+  # Directory-specific schema override
+  - name: "academic_papers"
+    type: "batch"
+    kind: "pdf"
+    dataset: "data/academic/"
+    chunk_mode: "page"
+    # Directory-specific schema (overrides global schema)
+    schema:
+      directory_pattern: ".*academic.*"  # Regex pattern to match directory
+      default_license: "CC-BY-SA"
+      text_prefix: "[ACADEMIC PAPER]\n"
+      metadata_mapping:
+        paper_title: "title"
+        paper_authors: "author"
+        publication_year: "year"
+
+policies:
+  licenses: "src/clean_corpus/policies/defaults/licenses.yaml"
+  quality: "src/clean_corpus/policies/defaults/quality.yaml"
+  pii: "src/clean_corpus/policies/defaults/pii.yaml"
+  curriculum: "src/clean_corpus/policies/defaults/curriculum.yaml"
+
+stages:
+  - license_gate
+  - sanitize
+  - exact_dedup
+  - quality_gate
+  - pii_policy_gate
+  - semantic_simhash
+  - curriculum_eligibility
