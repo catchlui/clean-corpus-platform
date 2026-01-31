@@ -40,6 +40,10 @@ storage_example/
 *.jsonl
 input-output-exec/
 
+# Ensure source storage package is tracked even though storage/ is globally ignored
+!src/clean_corpus/storage/
+!src/clean_corpus/storage/*
+
 # Logs
 *.log
 
