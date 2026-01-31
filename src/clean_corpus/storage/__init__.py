@@ -1,13 +1,15 @@
-"""Storage abstraction layer."""
+"""Storage helpers for local and S3 backends."""
 
-from .base import StorageBackend, LocalStorageBackend, S3StorageBackend, get_storage_backend
-from .manager import StorageManager, get_storage_manager
+from .base import (
+    StorageBackend,
+    LocalStorageBackend,
+    S3StorageBackend,
+    get_storage_backend,
+)
 
 __all__ = [
     "StorageBackend",
     "LocalStorageBackend",
     "S3StorageBackend",
     "get_storage_backend",
-    "StorageManager",
-    "get_storage_manager",
 ]
